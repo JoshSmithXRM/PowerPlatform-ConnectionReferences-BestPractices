@@ -210,10 +210,8 @@ public class ConnectionReferenceProcessor
             var content = await response.Content.ReadAsStringAsync();
             var json = JObject.Parse(content);
             results.AddRange(json["value"]!.Select(f => (JObject)f));
-            requestUri = json["@odata.nextLink"]?.ToString();
-        }
-
-        return results;
+            requestUri = json["@odata.nextLink"]?.ToString() ?? string.Empty;
+        }        return results;
     }
 
     private FlowInfo? ExtractFlowInfo(JObject flow)
@@ -222,16 +220,16 @@ public class ConnectionReferenceProcessor
         var flowId = flow["workflowid"]?.ToString();
         var clientDataJson = flow["clientdata"]?.ToString();
 
-        if (string.IsNullOrEmpty(clientDataJson))
+        if (string.IsNullOrEmpty(clientDataJson) || string.IsNullOrEmpty(flowName) || string.IsNullOrEmpty(flowId))
         {
-            Console.WriteLine($"[SKIP] {flowName}: No clientdata found.");
+            Console.WriteLine($"[SKIP] {flowName}: No clientdata found or missing required fields.");
             return null;
         }
 
         return new FlowInfo
         {
-            Id = flowId!,
-            Name = flowName!,
+            Id = flowId,
+            Name = flowName,
             ClientData = clientDataJson
         };
     }
