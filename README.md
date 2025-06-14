@@ -131,7 +131,7 @@ Configure the tool by editing `appsettings.json`:
     "DataverseUrl": "https://yourorg.crm.dynamics.com"
   },
   "ConnectionReferences": {
-    "Prefix": "shared",
+    "Prefix": "new",
     "ProviderMappings": {
       "shared_azuread": {
         "connectionId": "your-connection-id",
