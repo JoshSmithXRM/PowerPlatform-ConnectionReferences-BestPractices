@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using PowerPlatform.ConnectionReferences.Tool.Models;
-using PowerPlatform.ConnectionReferences.Tool.Services;
+using PowerPlatform.Tools.ConnectionReferences.Models;
+using PowerPlatform.Tools.ConnectionReferences.Services;
 using System.Text;
 
-namespace PowerPlatform.ConnectionReferences.Tool;
+namespace PowerPlatform.Tools.ConnectionReferences;
 
 public partial class ConnectionReferenceProcessor
 {

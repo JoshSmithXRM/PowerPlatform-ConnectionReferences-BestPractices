@@ -1,9 +1,9 @@
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
-using PowerPlatform.ConnectionReferences.Tool.Models;
+using PowerPlatform.Tools.ConnectionReferences.Models;
 using System.Net.Http.Headers;
 
-namespace PowerPlatform.ConnectionReferences.Tool.Services;
+namespace PowerPlatform.Tools.ConnectionReferences.Services;
 
 public class AuthenticationService
 {

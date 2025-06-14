@@ -1,7 +1,7 @@
 using System.CommandLine;
 using Microsoft.Extensions.Configuration;
 
-namespace PowerPlatform.ConnectionReferences.Tool;
+namespace PowerPlatform.Tools.ConnectionReferences;
 
 class Program
 {
@@ -92,7 +92,7 @@ class Program
                 case "analyze":
                     if (!string.IsNullOrEmpty(format))
                     {
-                        if (!Enum.TryParse<PowerPlatform.ConnectionReferences.Tool.Models.OutputFormat>(format, true, out var outputFormat))
+                        if (!Enum.TryParse<PowerPlatform.Tools.ConnectionReferences.Models.OutputFormat>(format, true, out var outputFormat))
                         {
                             Console.WriteLine($"Invalid format '{format}'. Valid options: table, vertical, csv, json");
                             Environment.Exit(1);

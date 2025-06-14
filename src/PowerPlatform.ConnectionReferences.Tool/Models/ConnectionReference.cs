@@ -1,4 +1,4 @@
-namespace PowerPlatform.ConnectionReferences.Tool.Models;
+namespace PowerPlatform.Tools.ConnectionReferences.Models;
 
 public class ConnectionReference
 {
