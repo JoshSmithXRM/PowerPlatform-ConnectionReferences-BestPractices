@@ -40,66 +40,36 @@ class Program
         createRefsCommand.AddOption(solutionOption);
         createRefsCommand.AddOption(dryRunOption);
         rootCommand.AddCommand(createRefsCommand);
+        createRefsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("create-refs", solution, dryRun, null), solutionOption, dryRunOption);
 
         var updateFlowsCommand = new Command("update-flows", "Update flows to use shared connection references");
         updateFlowsCommand.AddOption(solutionOption);
-        updateFlowsCommand.AddOption(dryRunOption); rootCommand.AddCommand(updateFlowsCommand);
+        updateFlowsCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(updateFlowsCommand);
+        updateFlowsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("update-flows", solution, dryRun, null), solutionOption, dryRunOption);
 
         var processCommand = new Command("process", "Full process: create connection references and update flows");
         processCommand.AddOption(solutionOption);
         processCommand.AddOption(dryRunOption);
         rootCommand.AddCommand(processCommand);
+        processCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("process", solution, dryRun, null), solutionOption, dryRunOption);
 
         var generateCommand = new Command("generate-deployment-settings", "Generate deployment settings JSON");
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(outputOption);
         rootCommand.AddCommand(generateCommand);
+        generateCommand.SetHandler(async (solution, output) => await ExecuteCommand("generate-deployment-settings", solution, false, output), solutionOption, outputOption);
 
         var cleanupCommand = new Command("cleanup", "Remove old unused connection references");
         cleanupCommand.AddOption(solutionOption);
         cleanupCommand.AddOption(dryRunOption);
-        rootCommand.AddCommand(cleanupCommand);
-
-        analyzeCommand.SetHandler(async (solution, format, output) => await ExecuteAnalyzeCommand(solution, format, output), solutionOption, formatOption, outputOption);
-        createRefsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("create-refs", solution, dryRun, null), solutionOption, dryRunOption);
-        updateFlowsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("update-flows", solution, dryRun, null), solutionOption, dryRunOption);
-        processCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("process", solution, dryRun, null), solutionOption, dryRunOption);
-        generateCommand.SetHandler(async (solution, output) => await ExecuteCommand("generate-deployment-settings", solution, false, output), solutionOption, outputOption);
+        rootCommand.AddCommand(cleanupCommand); analyzeCommand.SetHandler(async (solution, format, output) => await ExecuteCommand("analyze", solution, false, output, format), solutionOption, formatOption, outputOption);
         cleanupCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("cleanup", solution, dryRun, null), solutionOption, dryRunOption);
 
         return await rootCommand.InvokeAsync(args);
     }
 
-    static async Task ExecuteAnalyzeCommand(string solution, string format, string? output)
-    {
-        try
-        {
-            var config = LoadConfiguration();
-            var processor = new ConnectionReferenceProcessor(config);
-
-            Console.WriteLine($"=== Power Platform Connection References Tool ===");
-            Console.WriteLine($"Command: analyze");
-            Console.WriteLine($"Solution: {solution}");
-            Console.WriteLine($"Format: {format}");
-            if (!string.IsNullOrEmpty(output))
-                Console.WriteLine($"Output: {output}"); Console.WriteLine();
-
-            if (!Enum.TryParse<PowerPlatform.ConnectionReferences.Tool.Models.OutputFormat>(format, true, out var outputFormat))
-            {
-                Console.WriteLine($"Invalid format '{format}'. Valid options: table, vertical, csv, json");
-                Environment.Exit(1);
-            }
-
-            await processor.AnalyzeAsync(solution, outputFormat, output);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-            Environment.Exit(1);
-        }
-    }
-
-    static async Task ExecuteCommand(string command, string solution, bool dryRun, string? output)
+    static async Task ExecuteCommand(string command, string solution, bool dryRun, string? output, string? format = null)
     {
         try
         {
@@ -109,13 +79,30 @@ class Program
             Console.WriteLine($"=== Power Platform Connection References Tool ===");
             Console.WriteLine($"Command: {command}");
             Console.WriteLine($"Solution: {solution}");
-            Console.WriteLine($"Dry Run: {dryRun}");
+            if (command != "analyze")
+                Console.WriteLine($"Dry Run: {dryRun}");
+            if (!string.IsNullOrEmpty(format))
+                Console.WriteLine($"Format: {format}");
+            if (!string.IsNullOrEmpty(output))
+                Console.WriteLine($"Output: {output}");
             Console.WriteLine();
 
             switch (command)
             {
                 case "analyze":
-                    await processor.AnalyzeAsync(solution);
+                    if (!string.IsNullOrEmpty(format))
+                    {
+                        if (!Enum.TryParse<PowerPlatform.ConnectionReferences.Tool.Models.OutputFormat>(format, true, out var outputFormat))
+                        {
+                            Console.WriteLine($"Invalid format '{format}'. Valid options: table, vertical, csv, json");
+                            Environment.Exit(1);
+                        }
+                        await processor.AnalyzeAsync(solution, outputFormat, output);
+                    }
+                    else
+                    {
+                        await processor.AnalyzeAsync(solution);
+                    }
                     break;
                 case "create-refs":
                     await processor.CreateConnectionReferencesAsync(solution, dryRun);
