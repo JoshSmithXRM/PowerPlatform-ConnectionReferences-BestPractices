@@ -446,3 +446,48 @@ Desired behavior: Each connection reference → Different connection
 - [Solution Packager](https://learn.microsoft.com/en-us/power-platform/alm/solution-packager-tool) - Solution packaging and source control
 - [Configuration Migration Tool](https://learn.microsoft.com/en-us/power-platform/admin/manage-configuration-data) - Data migration between environments
 - [Power Platform Center of Excellence (CoE) Kit](https://learn.microsoft.com/en-us/power-platform/guidance/coe/starter-kit) - Governance and monitoring tools
+
+## Prerequisites
+
+- **.NET 8.0 SDK** or later
+- **Power Platform environment** with appropriate permissions
+- **Azure AD tenant** access for authentication setup
+
+## Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/PowerPlatform-ConnectionReferences-BestPractices.git
+   cd PowerPlatform-ConnectionReferences-BestPractices/src/PowerPlatform.Tools.ConnectionReferences
+   ```
+
+2. **Configure authentication** in `appsettings.json` (see [AUTHENTICATION.md](src/PowerPlatform.Tools.ConnectionReferences/AUTHENTICATION.md))
+
+3. **Build and run**:
+   ```bash
+   dotnet build
+   dotnet run -- analyze --solution "YourSolutionName"
+   ```
+
+## Contributing
+
+This is a specialized tool focused on Power Platform connection reference best practices. While the code is open source for transparency and learning, **this project is not actively seeking contributions**.
+
+**If you encounter issues:**
+- Check the [troubleshooting sections](#troubleshooting) in this README
+- Review the [AUTHENTICATION.md](src/PowerPlatform.Tools.ConnectionReferences/AUTHENTICATION.md) guide
+- Search existing [GitHub Issues](../../issues) for similar problems
+
+**For feature requests or bugs:**
+- Open an [issue](../../issues) with detailed information
+- Include error messages, configuration (without secrets), and steps to reproduce
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+This tool is provided as-is for educational and operational purposes. Always test in development environments before using in production scenarios. Follow your organization's change management and ALM processes.
+
+**Microsoft Trademarks**: Power Platform, Power Automate, Power Apps, and Dataverse are trademarks of Microsoft Corporation.
