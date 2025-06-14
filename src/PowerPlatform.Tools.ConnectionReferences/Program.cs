@@ -21,7 +21,8 @@ class Program
 
         var dryRunOption = new Option<bool>(
             name: "--dry-run",
-            description: "Preview changes without making modifications"); var outputOption = new Option<string>(
+            description: "Preview changes without making modifications");
+        var outputOption = new Option<string>(
             name: "--output",
             description: "Output file path");
 
