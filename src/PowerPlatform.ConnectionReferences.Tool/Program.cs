@@ -1,57 +1,122 @@
+using System.CommandLine;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using PowerPlatform.ConnectionReferences.Tool.Services;
 
 namespace PowerPlatform.ConnectionReferences.Tool;
 
 class Program
 {
-    static async Task Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
-        var host = CreateHostBuilder(args).Build();
-        
-        var logger = host.Services.GetRequiredService<ILogger<Program>>();
-        var connectionReferenceService = host.Services.GetRequiredService<IConnectionReferenceService>();
-        
+        var rootCommand = new RootCommand("Power Platform Connection References Tool");
+
+        var solutionOption = new Option<string>(
+            name: "--solution",
+            description: "The unique name of the solution to process")
+        {
+            IsRequired = true
+        };
+
+        var dryRunOption = new Option<bool>(
+            name: "--dry-run",
+            description: "Preview changes without making modifications");
+
+        var outputOption = new Option<string>(
+            name: "--output",
+            description: "Output file path");
+
+        // Analyze command
+        var analyzeCommand = new Command("analyze", "Analyze solution connection references");
+        analyzeCommand.AddOption(solutionOption);
+        rootCommand.AddCommand(analyzeCommand);
+
+        // Create connection references command
+        var createRefsCommand = new Command("create-refs", "Create new shared connection references");
+        createRefsCommand.AddOption(solutionOption);
+        createRefsCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(createRefsCommand);
+
+        // Update flows command
+        var updateFlowsCommand = new Command("update-flows", "Update flows to use shared connection references");
+        updateFlowsCommand.AddOption(solutionOption);
+        updateFlowsCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(updateFlowsCommand);
+
+        // Process command (create + update)
+        var processCommand = new Command("process", "Full process: create connection references and update flows");
+        processCommand.AddOption(solutionOption);
+        processCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(processCommand);
+
+        // Generate deployment settings command
+        var generateCommand = new Command("generate-deployment-settings", "Generate deployment settings JSON");
+        generateCommand.AddOption(solutionOption);
+        generateCommand.AddOption(outputOption);
+        rootCommand.AddCommand(generateCommand);
+
+        // Cleanup command
+        var cleanupCommand = new Command("cleanup", "Remove old unused connection references");
+        cleanupCommand.AddOption(solutionOption);
+        cleanupCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(cleanupCommand);
+
+        // Set up command handlers
+        analyzeCommand.SetHandler(async (solution) => await ExecuteCommand("analyze", solution, false, null), solutionOption);
+        createRefsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("create-refs", solution, dryRun, null), solutionOption, dryRunOption);
+        updateFlowsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("update-flows", solution, dryRun, null), solutionOption, dryRunOption);
+        processCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("process", solution, dryRun, null), solutionOption, dryRunOption);
+        generateCommand.SetHandler(async (solution, output) => await ExecuteCommand("generate-deployment-settings", solution, false, output), solutionOption, outputOption);
+        cleanupCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("cleanup", solution, dryRun, null), solutionOption, dryRunOption);
+
+        return await rootCommand.InvokeAsync(args);
+    }
+
+    static async Task ExecuteCommand(string command, string solution, bool dryRun, string? output)
+    {
         try
         {
-            logger.LogInformation("Starting Power Platform Connection References Tool");
-            
-            // TODO: Parse command line arguments for solution name/ID
-            var solutionName = "YourSolutionName"; // This will come from args
-            
-            await connectionReferenceService.ProcessSolutionAsync(solutionName);
-            
-            logger.LogInformation("Tool execution completed successfully");
+            var config = LoadConfiguration();
+            var processor = new ConnectionReferenceProcessor(config);
+
+            Console.WriteLine($"=== Power Platform Connection References Tool ===");
+            Console.WriteLine($"Command: {command}");
+            Console.WriteLine($"Solution: {solution}");
+            Console.WriteLine($"Dry Run: {dryRun}");
+            Console.WriteLine();
+
+            switch (command)
+            {
+                case "analyze":
+                    await processor.AnalyzeAsync(solution);
+                    break;
+                case "create-refs":
+                    await processor.CreateConnectionReferencesAsync(solution, dryRun);
+                    break;
+                case "update-flows":
+                    await processor.UpdateFlowsAsync(solution, dryRun);
+                    break;
+                case "process":
+                    await processor.ProcessAsync(solution, dryRun);
+                    break;
+                case "generate-deployment-settings":
+                    await processor.GenerateDeploymentSettingsAsync(solution, output ?? "deploymentsettings.json");
+                    break;
+                case "cleanup":
+                    await processor.CleanupAsync(solution, dryRun);
+                    break;
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "An error occurred during tool execution");
+            Console.WriteLine($"Error: {ex.Message}");
             Environment.Exit(1);
         }
     }
-    
-    static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .ConfigureAppConfiguration((context, config) =>
-            {
-                config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-                config.AddJsonFile($"appsettings.{context.HostingEnvironment.EnvironmentName}.json", optional: true);
-                config.AddUserSecrets<Program>();
-                config.AddEnvironmentVariables();
-                config.AddCommandLine(args);
-            })
-            .ConfigureServices((context, services) =>
-            {
-                services.Configure<PowerPlatformSettings>(context.Configuration.GetSection("PowerPlatform"));
-                services.AddScoped<IConnectionReferenceService, ConnectionReferenceService>();
-                services.AddScoped<IPowerPlatformClient, PowerPlatformClient>();
-            })
-            .ConfigureLogging(logging =>
-            {
-                logging.ClearProviders();
-                logging.AddConsole();
-            });
+
+    static IConfiguration LoadConfiguration()
+    {
+        return new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+    }
 }
