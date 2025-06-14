@@ -18,16 +18,17 @@ public class ConnectionReferenceProcessor
         _settings = new AppSettings();
         config.GetSection("PowerPlatform").Bind(_settings.PowerPlatform);
         config.GetSection("ConnectionReferences").Bind(_settings.ConnectionReferences);
-        
+
         _authService = new AuthenticationService(_settings.PowerPlatform);
-    }    public async Task AnalyzeAsync(string solutionName)
+    }
+    public async Task AnalyzeAsync(string solutionName)
     {
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
-        
+
         Console.WriteLine($"[INFO] Found {flows.Count} cloud flows in solution '{solutionName}'");
         Console.WriteLine();
-        
+
         if (flows.Count == 0)
         {
             Console.WriteLine("No flows found in the solution.");
@@ -36,7 +37,7 @@ public class ConnectionReferenceProcessor
 
         // Print header
         Console.WriteLine("=== FLOW AND CONNECTION REFERENCE ANALYSIS ===");
-        Console.WriteLine();        Console.WriteLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
+        Console.WriteLine(); Console.WriteLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
         Console.WriteLine(new string('-', 235));
 
         foreach (var flow in flows)
@@ -45,7 +46,7 @@ public class ConnectionReferenceProcessor
             if (flowInfo == null) continue;
 
             var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
-            
+
             if (connectionRefs.Count == 0)
             {
                 Console.WriteLine($"{flowInfo.Id,-38} | {TruncateString(flowInfo.Name, 25),-25} | {"(No connection references)",-38} | {"",-50} | {"",-35} | {"",-38}");
@@ -57,23 +58,24 @@ public class ConnectionReferenceProcessor
             {
                 // Get detailed connection reference information
                 var connRefDetails = await GetConnectionReferenceDetailsAsync(context, connRef.LogicalName);
-                
-                string flowIdDisplay = firstRef ? flowInfo.Id : "";                string flowNameDisplay = firstRef ? TruncateString(flowInfo.Name, 25) : "";
-                
+
+                string flowIdDisplay = firstRef ? flowInfo.Id : ""; string flowNameDisplay = firstRef ? TruncateString(flowInfo.Name, 25) : "";
+
                 Console.WriteLine($"{flowIdDisplay,-38} | {flowNameDisplay,-25} | {connRefDetails?.Id ?? "Unknown",-38} | {connRef.LogicalName,-50} | {TruncateString(connRef.ApiName, 35),-35} | {connRefDetails?.ConnectionId ?? "Not Set",-38}");
-                
+
                 firstRef = false;
             }
-              if (connectionRefs.Count > 1)
+            if (connectionRefs.Count > 1)
             {
                 Console.WriteLine(new string('-', 235));
             }
         }
-        
+
         Console.WriteLine();
         Console.WriteLine("=== SUMMARY ===");
         Console.WriteLine($"Total Flows: {flows.Count}");
-        Console.WriteLine($"Total Connection References: {flows.Sum(f => {
+        Console.WriteLine($"Total Connection References: {flows.Sum(f =>
+        {
             var flowInfo = ExtractFlowInfo(f);
             return flowInfo != null ? GetConnectionReferences(flowInfo.ClientData).Count : 0;
         })}");
@@ -91,7 +93,7 @@ public class ConnectionReferenceProcessor
             if (flowInfo == null) continue;
 
             var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
-            
+
             foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)).GroupBy(cr => cr.ApiName))
             {
                 await ProcessConnectionReferenceForProviderAsync(context, flowInfo, providerGroup.Key, stats, dryRun, solutionName);
@@ -134,7 +136,7 @@ public class ConnectionReferenceProcessor
     {
         Console.WriteLine("=== CREATING CONNECTION REFERENCES ===");
         await CreateConnectionReferencesAsync(solutionName, dryRun);
-        
+
         Console.WriteLine("\n=== UPDATING FLOWS ===");
         await UpdateFlowsAsync(solutionName, dryRun);
     }
@@ -143,7 +145,7 @@ public class ConnectionReferenceProcessor
     {
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
-        
+
         var deploymentSettings = new JObject
         {
             ["ConnectionReferences"] = new JObject()
@@ -155,11 +157,11 @@ public class ConnectionReferenceProcessor
             if (flowInfo == null) continue;
 
             var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
-            
+
             foreach (var connRef in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)))
             {
                 var logicalName = GenerateLogicalName(connRef.ApiName, flowInfo.Id);
-                if (!deploymentSettings["ConnectionReferences"]!.HasValues || 
+                if (!deploymentSettings["ConnectionReferences"]!.HasValues ||
                     deploymentSettings["ConnectionReferences"]![logicalName] == null)
                 {
                     deploymentSettings["ConnectionReferences"]![logicalName] = new JObject
@@ -180,14 +182,16 @@ public class ConnectionReferenceProcessor
     {
         Console.WriteLine("[INFO] Cleanup functionality not yet implemented");
         await Task.CompletedTask;
-    }    private async Task<HttpClient> InitializeContextAsync()
+    }
+    private async Task<HttpClient> InitializeContextAsync()
     {
         if (_httpClient == null)
         {
             _httpClient = await _authService.GetAuthenticatedHttpClientAsync();
         }
         return _httpClient;
-    }    private async Task<List<JObject>> GetCloudFlowsInSolutionAsync(HttpClient httpClient, string solutionName)
+    }
+    private async Task<List<JObject>> GetCloudFlowsInSolutionAsync(HttpClient httpClient, string solutionName)
     {
         var fetchXml = $@"
         <fetch>
@@ -223,7 +227,8 @@ public class ConnectionReferenceProcessor
             var json = JObject.Parse(content);
             results.AddRange(json["value"]!.Select(f => (JObject)f));
             requestUri = json["@odata.nextLink"]?.ToString() ?? string.Empty;
-        }        return results;
+        }
+        return results;
     }
 
     private FlowInfo? ExtractFlowInfo(JObject flow)
@@ -288,7 +293,7 @@ public class ConnectionReferenceProcessor
         try
         {
             var connRefId = await CreateConnectionReferenceAsync(httpClient, logicalName, displayName, mapping.ConnectionId, mapping.ConnectorId);
-            
+
             if (string.IsNullOrEmpty(connRefId))
             {
                 stats.CreatedConnRefErrorCount++;
@@ -307,7 +312,7 @@ public class ConnectionReferenceProcessor
 
             stats.CreatedConnRefCount++;
             Console.WriteLine($"[CREATE] {flow.Name}: Successfully created connection reference '{logicalName}' (ID: {connRefId}) for provider '{provider}'");
-            
+
             return new ConnectionReferenceResult { Id = connRefId, LogicalName = logicalName };
         }
         catch (Exception ex)
@@ -566,7 +571,7 @@ public class ConnectionReferenceProcessor
     {
         if (string.IsNullOrEmpty(input))
             return "";
-        
+
         return input.Length <= maxLength ? input : input.Substring(0, maxLength - 3) + "...";
     }
 
@@ -581,7 +586,7 @@ public class ConnectionReferenceProcessor
     {
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
-        
+
         // Build analysis result
         var analysisResult = new AnalysisResult
         {
@@ -611,7 +616,8 @@ public class ConnectionReferenceProcessor
                     LogicalName = connRef.LogicalName,
                     Provider = connRef.ApiName,
                     ConnectionId = connRefDetails?.ConnectionId ?? "Not Set"
-                });            }
+                });
+            }
 
             analysisResult.Flows.Add(flowAnalysis);
         }
@@ -637,10 +643,10 @@ public class ConnectionReferenceProcessor
     private async Task OutputTable(AnalysisResult analysisResult, string? outputPath)
     {
         var output = new StringBuilder();
-        
+
         output.AppendLine($"=== FLOW AND CONNECTION REFERENCE ANALYSIS FOR '{analysisResult.SolutionName}' ===");
         output.AppendLine();
-        
+
         if (analysisResult.Flows.Count == 0)
         {
             output.AppendLine("No flows found in the solution.");
@@ -664,19 +670,19 @@ public class ConnectionReferenceProcessor
                 {
                     string flowIdDisplay = firstRef ? flow.FlowId : "";
                     string flowNameDisplay = firstRef ? TruncateString(flow.FlowName, 25) : "";
-                    
+
                     output.AppendLine($"{flowIdDisplay,-38} | {flowNameDisplay,-25} | {connRef.ConnectionReferenceId,-38} | {connRef.LogicalName,-50} | {TruncateString(connRef.Provider, 35),-35} | {connRef.ConnectionId,-38}");
-                    
+
                     firstRef = false;
                 }
-                
+
                 if (flow.ConnectionReferences.Count > 1)
                 {
                     output.AppendLine(new string('-', 235));
                 }
             }
         }
-        
+
         output.AppendLine();
         output.AppendLine("=== SUMMARY ===");
         output.AppendLine($"Total Flows: {analysisResult.Flows.Count}");
@@ -691,13 +697,14 @@ public class ConnectionReferenceProcessor
         {
             Console.Write(output.ToString());
         }
-    }    private async Task OutputVertical(AnalysisResult analysisResult, string? outputPath)
+    }
+    private async Task OutputVertical(AnalysisResult analysisResult, string? outputPath)
     {
         var output = new StringBuilder();
-        
+
         output.AppendLine($"=== FLOW AND CONNECTION REFERENCE ANALYSIS FOR '{analysisResult.SolutionName}' ===");
         output.AppendLine();
-        
+
         if (analysisResult.Flows.Count == 0)
         {
             output.AppendLine("No flows found in the solution.");
@@ -708,7 +715,7 @@ public class ConnectionReferenceProcessor
             {
                 output.AppendLine($"Flow: {flow.FlowName}");
                 output.AppendLine($"  ID: {flow.FlowId}");
-                
+
                 if (flow.ConnectionReferences.Count == 0)
                 {
                     output.AppendLine($"  Connection References: None");
@@ -729,7 +736,7 @@ public class ConnectionReferenceProcessor
                 output.AppendLine();
             }
         }
-        
+
         output.AppendLine("=== SUMMARY ===");
         output.AppendLine($"Total Flows: {analysisResult.Flows.Count}");
         output.AppendLine($"Total Connection References: {analysisResult.Flows.Sum(f => f.ConnectionReferences.Count)}");
@@ -743,13 +750,14 @@ public class ConnectionReferenceProcessor
         {
             Console.Write(output.ToString());
         }
-    }    private async Task OutputCsvAsync(AnalysisResult analysisResult, string? outputPath)
+    }
+    private async Task OutputCsvAsync(AnalysisResult analysisResult, string? outputPath)
     {
         var output = new StringBuilder();
-        
+
         // CSV Header
         output.AppendLine("FlowId,FlowName,ConnectionReferenceId,LogicalName,Provider,ConnectionId");
-        
+
         foreach (var flow in analysisResult.Flows)
         {
             if (flow.ConnectionReferences.Count == 0)
@@ -767,7 +775,7 @@ public class ConnectionReferenceProcessor
         }
 
         string csvContent = output.ToString();
-        
+
         if (outputPath != null)
         {
             await File.WriteAllTextAsync(outputPath, csvContent);
@@ -783,10 +791,11 @@ public class ConnectionReferenceProcessor
     {
         if (string.IsNullOrEmpty(value))
             return value;
-            
+
         // Escape quotes by doubling them
         return value.Replace("\"", "\"\"");
-    }    private async Task OutputJsonAsync(AnalysisResult analysisResult, string? outputPath)
+    }
+    private async Task OutputJsonAsync(AnalysisResult analysisResult, string? outputPath)
     {
         var jsonSettings = new JsonSerializerSettings
         {
@@ -822,7 +831,7 @@ public class ConnectionReferenceProcessor
         };
 
         string jsonContent = JsonConvert.SerializeObject(jsonOutput, jsonSettings);
-        
+
         if (outputPath != null)
         {
             await File.WriteAllTextAsync(outputPath, jsonContent);
@@ -851,6 +860,6 @@ public class ConnectionReferenceProcessor
     {
         public string ConnectionReferenceId { get; set; } = string.Empty;
         public string LogicalName { get; set; } = string.Empty;
-        public string Provider { get; set; } = string.Empty;        public string ConnectionId { get; set; } = string.Empty;
+        public string Provider { get; set; } = string.Empty; public string ConnectionId { get; set; } = string.Empty;
     }
 }
