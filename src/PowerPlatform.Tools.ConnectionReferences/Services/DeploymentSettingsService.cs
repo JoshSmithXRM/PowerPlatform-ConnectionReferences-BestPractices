@@ -7,58 +7,57 @@ namespace PowerPlatform.Tools.ConnectionReferences.Services;
 public class DeploymentSettingsService : IDeploymentSettingsService
 {
     private readonly AppSettings _settings;
-    private readonly IFlowService _flowService;
+    private readonly IConnectionReferenceService _connectionReferenceService;
     private readonly IDataverseService _dataverseService;
 
-    public DeploymentSettingsService(AppSettings settings, IFlowService flowService, IDataverseService dataverseService)
+    public DeploymentSettingsService(AppSettings settings, IConnectionReferenceService connectionReferenceService, IDataverseService dataverseService)
     {
         _settings = settings;
-        _flowService = flowService;
+        _connectionReferenceService = connectionReferenceService;
         _dataverseService = dataverseService;
     }
 
     public async Task GenerateDeploymentSettingsAsync(string solutionName, string outputPath)
     {
         var httpClient = await _dataverseService.GetAuthenticatedHttpClientAsync();
-        var flows = await _flowService.GetCloudFlowsInSolutionAsync(httpClient, solutionName);
 
-        var connectionReferences = new List<JObject>();
-        var processedLogicalNames = new HashSet<string>();
+        var connectionReferences = await _connectionReferenceService.GetConnectionReferencesInSolutionAsync(httpClient, solutionName);
 
-        foreach (var flow in flows)
+        var deploymentConnectionReferences = new List<JObject>();
+
+        foreach (var connectionRef in connectionReferences)
         {
-            var flowInfo = _flowService.ExtractFlowInfo(flow);
-            if (flowInfo == null) continue;
+            var connectorName = ExtractConnectorNameFromId(connectionRef.ConnectorId);
+            var connectionIdPlaceholder = $"{{{{REPLACE_WITH_{connectorName.ToUpper()}_CONNECTION_ID}}}}";
 
-            var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
-
-            foreach (var connRef in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)))
+            deploymentConnectionReferences.Add(new JObject
             {
-                var logicalName = _dataverseService.GenerateLogicalName(connRef.ApiName, flowInfo.Id);
-
-                if (!processedLogicalNames.Contains(logicalName))
-                {
-                    var connectorName = connRef.ApiName.Replace("shared_", "");
-                    var connectionIdPlaceholder = $"{{{{REPLACE_WITH_{connectorName.ToUpper()}_CONNECTION_ID}}}}";
-
-                    connectionReferences.Add(new JObject
-                    {
-                        ["LogicalName"] = logicalName,
-                        ["ConnectionId"] = connectionIdPlaceholder,
-                        ["ConnectorId"] = _settings.ConnectionReferences.ProviderMappings.GetValueOrDefault(connRef.ApiName)?.ConnectorId ?? ""
-                    });
-                    processedLogicalNames.Add(logicalName);
-                }
-            }
+                ["LogicalName"] = connectionRef.LogicalName,
+                ["ConnectionId"] = connectionIdPlaceholder,
+                ["ConnectorId"] = connectionRef.ConnectorId
+            });
         }
 
         var deploymentSettings = new JObject
         {
             ["EnvironmentVariables"] = new JArray(),
-            ["ConnectionReferences"] = new JArray(connectionReferences)
+            ["ConnectionReferences"] = new JArray(deploymentConnectionReferences)
         };
 
         await File.WriteAllTextAsync(outputPath, deploymentSettings.ToString(Formatting.Indented));
-        Console.WriteLine($"[INFO] Deployment settings written to {outputPath}");
+    }
+
+    private string ExtractConnectorNameFromId(string connectorId)
+    {
+        if (string.IsNullOrEmpty(connectorId))
+            return "UNKNOWN";
+
+        var parts = connectorId.Split('/');
+        var connectorName = parts.LastOrDefault() ?? "unknown";
+
+        if (connectorName.StartsWith("shared_"))
+            connectorName = connectorName.Substring(7);
+
+        return connectorName;
     }
 }
