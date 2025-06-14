@@ -1,9 +1,8 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Identity.Client;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PowerPlatform.ConnectionReferences.Tool.Models;
-using System.Net.Http.Headers;
+using PowerPlatform.ConnectionReferences.Tool.Services;
 using System.Text;
 
 namespace PowerPlatform.ConnectionReferences.Tool;
@@ -11,6 +10,7 @@ namespace PowerPlatform.ConnectionReferences.Tool;
 public class ConnectionReferenceProcessor
 {
     private readonly AppSettings _settings;
+    private readonly AuthenticationService _authService;
     private HttpClient? _httpClient;
 
     public ConnectionReferenceProcessor(IConfiguration config)
@@ -18,6 +18,8 @@ public class ConnectionReferenceProcessor
         _settings = new AppSettings();
         config.GetSection("PowerPlatform").Bind(_settings.PowerPlatform);
         config.GetSection("ConnectionReferences").Bind(_settings.ConnectionReferences);
+        
+        _authService = new AuthenticationService(_settings.PowerPlatform);
     }
 
     public async Task AnalyzeAsync(string solutionName)
@@ -144,38 +146,14 @@ public class ConnectionReferenceProcessor
     {
         Console.WriteLine("[INFO] Cleanup functionality not yet implemented");
         await Task.CompletedTask;
-    }
-
-    private async Task<HttpClient> InitializeContextAsync()
+    }    private async Task<HttpClient> InitializeContextAsync()
     {
         if (_httpClient == null)
         {
-            _httpClient = await GetAuthenticatedHttpClientAsync();
+            _httpClient = await _authService.GetAuthenticatedHttpClientAsync();
         }
         return _httpClient;
-    }
-
-    private async Task<HttpClient> GetAuthenticatedHttpClientAsync()
-    {
-        var app = ConfidentialClientApplicationBuilder.Create(_settings.PowerPlatform.ClientId)
-            .WithClientSecret(_settings.PowerPlatform.ClientSecret)
-            .WithAuthority($"https://login.microsoftonline.com/{_settings.PowerPlatform.TenantId}")
-            .Build();
-
-        var scopes = new[] { $"{_settings.PowerPlatform.DataverseUrl}/.default" };
-        var authResult = await app.AcquireTokenForClient(scopes).ExecuteAsync();
-        var token = authResult.AccessToken;
-
-        var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-        httpClient.DefaultRequestHeaders.Add("OData-MaxVersion", "4.0");
-        httpClient.DefaultRequestHeaders.Add("OData-Version", "4.0");
-
-        return httpClient;
-    }
-
-    private async Task<List<JObject>> GetCloudFlowsInSolutionAsync(HttpClient httpClient, string solutionName)
+    }    private async Task<List<JObject>> GetCloudFlowsInSolutionAsync(HttpClient httpClient, string solutionName)
     {
         var fetchXml = $@"
         <fetch>
