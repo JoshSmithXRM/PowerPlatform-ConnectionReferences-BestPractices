@@ -1,4 +1,5 @@
 using Microsoft.Identity.Client;
+using Microsoft.Identity.Client.Extensions.Msal;
 using PowerPlatform.ConnectionReferences.Tool.Models;
 using System.Net.Http.Headers;
 
@@ -55,33 +56,45 @@ public class AuthenticationService
 
         var result = await app.AcquireTokenForClient(scopes).ExecuteAsync();
         return result.AccessToken;
-    }
-
-    private async Task<string> GetInteractiveTokenAsync(string[] scopes)
+    }    private async Task<string> GetInteractiveTokenAsync(string[] scopes)
     {
+        var cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerPlatformConnectionRefTool");
+        Directory.CreateDirectory(cacheDirectory);
+        var cacheFile = Path.Combine(cacheDirectory, "msal_cache.dat");
+
         var app = PublicClientApplicationBuilder
             .Create(_settings.PublicClientId)
             .WithAuthority($"https://login.microsoftonline.com/{_settings.TenantId}")
             .WithRedirectUri("http://localhost")
+            .Build();        // Enable token cache persistence
+        var storageProperties = new StorageCreationPropertiesBuilder("msal_cache.dat", cacheDirectory)
             .Build();
+        var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+        cacheHelper.RegisterCache(app.UserTokenCache);
 
         try
         {
             // Try to get token silently first
             var accounts = await app.GetAccountsAsync();
-            var result = await app.AcquireTokenSilent(scopes, accounts.FirstOrDefault()).ExecuteAsync();
-            return result.AccessToken;
+            if (accounts.Any())
+            {
+                Console.WriteLine("Using cached authentication...");
+                var result = await app.AcquireTokenSilent(scopes, accounts.FirstOrDefault()).ExecuteAsync();
+                return result.AccessToken;
+            }
         }
         catch (MsalUiRequiredException)
         {
             // Interactive login required
-            Console.WriteLine("Opening browser for authentication...");
-            var result = await app.AcquireTokenInteractive(scopes)
-                .WithPrompt(Prompt.SelectAccount)
-                .ExecuteAsync();
-            return result.AccessToken;
         }
-    }    private async Task<string> GetUsernamePasswordTokenAsync(string[] scopes)
+
+        // Interactive login required
+        Console.WriteLine("Opening browser for authentication...");
+        var interactiveResult = await app.AcquireTokenInteractive(scopes)
+            .WithPrompt(Prompt.SelectAccount)
+            .ExecuteAsync();
+        return interactiveResult.AccessToken;
+    }private async Task<string> GetUsernamePasswordTokenAsync(string[] scopes)
     {
         if (string.IsNullOrEmpty(_settings.Username) || string.IsNullOrEmpty(_settings.Password))
         {

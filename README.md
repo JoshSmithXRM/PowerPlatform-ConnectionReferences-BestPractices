@@ -21,7 +21,28 @@ A console application for managing connection references in Power Platform solut
 ### Analyze Solution
 Analyze a solution to see what connection references are used and what would be created:
 ```bash
-dotnet run -- analyze --solution "YourSolutionName"
+dotnet run -- analyze --solution "YourSolutionName" [--format table|vertical|csv|json] [--output "filename"]
+```
+
+**Output Formats:**
+- `table` (default) - Tabular format in terminal
+- `vertical` - Tree-like format for better readability
+- `csv` - Comma-separated values for Excel/analysis
+- `json` - Structured JSON for automation/scripting
+
+**Examples:**
+```bash
+# Default table format
+dotnet run -- analyze --solution "MyFlows"
+
+# Vertical format for readability
+dotnet run -- analyze --solution "MyFlows" --format vertical
+
+# Export to CSV for analysis
+dotnet run -- analyze --solution "MyFlows" --format csv --output "analysis.csv"
+
+# JSON for automation
+dotnet run -- analyze --solution "MyFlows" --format json --output "analysis.json"
 ```
 
 ### Create Connection References
@@ -95,13 +116,20 @@ To find these values, you can use the Power Platform admin center or query the D
 
 - `--solution`: The unique name of the solution to process
 - `--dry-run`: Preview changes without making modifications
-- `--output`: Specify output file path (for deployment settings)
+- `--format`: Output format (table, vertical, csv, json) - analyze command only
+- `--output`: Specify output file path
 
 ## Examples
 
 ```bash
 # Safe analysis of a solution
 dotnet run -- analyze --solution "MyCloudFlows"
+
+# Analyze with vertical format for better readability
+dotnet run -- analyze --solution "MyCloudFlows" --format vertical
+
+# Export analysis to CSV
+dotnet run -- analyze --solution "MyCloudFlows" --format csv --output "flow-analysis.csv"
 
 # Test what would be created (no changes made)
 dotnet run -- process --solution "MyCloudFlows" --dry-run
