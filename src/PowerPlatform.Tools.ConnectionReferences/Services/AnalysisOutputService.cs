@@ -6,7 +6,7 @@ namespace PowerPlatform.Tools.ConnectionReferences.Services;
 
 public class AnalysisOutputService : IAnalysisOutputService
 {
-    private const int SeparatorLength = 228;
+    private const int TableSeparatorLength = 234;
     private const int SeparatorWidth = 80;
 
     public async Task OutputTableAsync(AnalysisResult analysisResult, string? outputPath)
@@ -23,7 +23,7 @@ public class AnalysisOutputService : IAnalysisOutputService
         else
         {
             output.AppendLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
-            output.AppendLine(new string('-', SeparatorLength));
+            output.AppendLine(new string('-', TableSeparatorLength));
 
             foreach (var flow in analysisResult.Flows)
             {
@@ -46,7 +46,7 @@ public class AnalysisOutputService : IAnalysisOutputService
 
                 if (flow.ConnectionReferences.Count > 1)
                 {
-                    output.AppendLine(new string('-', 235));
+                    output.AppendLine(new string('-', TableSeparatorLength));
                 }
             }
         }
