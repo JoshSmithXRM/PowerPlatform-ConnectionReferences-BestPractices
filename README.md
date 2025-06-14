@@ -196,6 +196,7 @@ The tool automatically handles different Dataverse environment versions by tryin
 - **"Invalid component type" warnings**: These are handled automatically and don't prevent successful operation
 - **Authentication token expiry**: The tool uses token caching and will prompt for re-authentication when needed
 - **Connection reference already exists**: The tool detects existing connection references and reuses them instead of creating duplicates
+- **Service Principal 403/ConnectionAuthorizationFailed errors**: Service principals need explicit "Can use" permission on connections - see [AUTHENTICATION.md](src/PowerPlatform.Tools.ConnectionReferences/AUTHENTICATION.md#service-principal-connection-permission-error) for detailed solution
 
 ## Best Practices
 

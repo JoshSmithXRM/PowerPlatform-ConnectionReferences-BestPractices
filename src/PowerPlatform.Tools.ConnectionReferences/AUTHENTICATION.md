@@ -164,6 +164,50 @@ For Interactive, Username/Password, and Device Code authentication methods, the 
 - Check that the user has write permissions to the cache location
 - Ensure antivirus software isn't blocking cache file creation
 
+## Troubleshooting Authentication Issues
+
+### Service Principal Connection Permission Error
+
+**Problem**: When using Service Principal authentication, you get a 403 Forbidden error or "ConnectionAuthorizationFailed" when trying to access connections, even though the service principal has appropriate Dataverse permissions.
+
+**Error Examples**:
+```
+HTTP 403 Forbidden
+{"error":"ConnectionAuthorizationFailed","message":"The connection is not authorized for the specified principal"}
+```
+
+**Root Cause**: Service principals require explicit permission to use connections, even if they have admin-level permissions in Dataverse.
+
+**Solution**: Each connection must be explicitly shared with the service principal:
+
+1. **In Power Platform Admin Center**:
+   - Go to your environment → Resources → Connections
+   - Find the connection(s) your flows use
+   - Click on the connection → Share
+   - Add your service principal as a user with "Can use" permission
+
+2. **In Power Automate Portal**:
+   - Go to Data → Connections
+   - Click the "..." menu on each connection
+   - Select "Share" 
+   - Add your service principal with "Can use" permission
+
+3. **Using PowerShell** (for bulk operations):
+   ```powershell
+   # Install Power Platform CLI if not already installed
+   pac install latest
+   
+   # Authenticate as an admin
+   pac auth create --url https://yourorg.crm.dynamics.com
+   
+   # Share connection with service principal
+   pac connection share --connection-id "connection-id" --principal "service-principal-object-id" --role CanUse
+   ```
+
+**Prevention**: When creating new connections for flows that will be managed by service principals, always share them with the service principal immediately.
+
+**Note**: This requirement exists because connections contain sensitive credential information, so Power Platform requires explicit permission grants rather than inheriting permissions from Dataverse roles.
+
 ## Field Reference
 
 | Field | Service Principal | Interactive | Username/Password | Device Code |
