@@ -7,7 +7,7 @@ using System.Text;
 
 namespace PowerPlatform.ConnectionReferences.Tool;
 
-public class ConnectionReferenceProcessor
+public partial class ConnectionReferenceProcessor
 {
     private readonly AppSettings _settings;
     private readonly AuthenticationService _authService;
@@ -35,7 +35,7 @@ public class ConnectionReferenceProcessor
             return;
         }
 
-        // Print header
+
         Console.WriteLine("=== FLOW AND CONNECTION REFERENCE ANALYSIS ===");
         Console.WriteLine(); Console.WriteLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
         Console.WriteLine(new string('-', 235));
@@ -56,7 +56,7 @@ public class ConnectionReferenceProcessor
             bool firstRef = true;
             foreach (var connRef in connectionRefs)
             {
-                // Get detailed connection reference information
+
                 var connRefDetails = await GetConnectionReferenceDetailsAsync(context, connRef.LogicalName);
 
                 string flowIdDisplay = firstRef ? flowInfo.Id : ""; string flowNameDisplay = firstRef ? TruncateString(flowInfo.Name, 25) : "";
@@ -161,10 +161,10 @@ public class ConnectionReferenceProcessor
                 var logicalName = GenerateLogicalName(connRef.ApiName, flowInfo.Id);                // Only add each logical name once
                 if (!processedLogicalNames.Contains(logicalName))
                 {
-                    // Create a descriptive placeholder for ConnectionId to make find-and-replace easier
+
                     var connectorName = connRef.ApiName.Replace("shared_", "");
                     var connectionIdPlaceholder = $"{{{{REPLACE_WITH_{connectorName.ToUpper()}_CONNECTION_ID}}}}";
-                    
+
                     connectionReferences.Add(new JObject
                     {
                         ["LogicalName"] = logicalName,
@@ -192,33 +192,33 @@ public class ConnectionReferenceProcessor
 
         Console.WriteLine($"[INFO] Starting cleanup for solution '{solutionName}'");
 
-        // 1. Get all connection references in solution
+
         var connectionRefs = await GetConnectionReferencesInSolutionAsync(context, solutionName);
         Console.WriteLine($"[INFO] Found {connectionRefs.Count} connection references in solution");
 
-        // 2. Get all flows in solution 
+
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
         Console.WriteLine($"[INFO] Found {flows.Count} flows in solution");
 
-        // 3. Build dependency map (which flows use which connection references)
+
         var dependencyMap = BuildConnectionReferenceDependencyMap(flows);
         Console.WriteLine($"[INFO] Found {dependencyMap.Count} connection references in use by flows");
 
-        // 4. Identify unused connection references
+
         var unusedConnRefs = connectionRefs.Where(cr => !dependencyMap.ContainsKey(cr.LogicalName)).ToList();
         var inUseConnRefs = connectionRefs.Where(cr => dependencyMap.ContainsKey(cr.LogicalName)).ToList();
 
         Console.WriteLine($"[INFO] Connection references in use: {inUseConnRefs.Count}");
         Console.WriteLine($"[INFO] Connection references unused: {unusedConnRefs.Count}");
 
-        // Log which ones are in use
+
         foreach (var inUseRef in inUseConnRefs)
         {
             var flowCount = dependencyMap[inUseRef.LogicalName].Count;
             Console.WriteLine($"[IN USE] '{inUseRef.LogicalName}' used by {flowCount} flow(s)");
         }
 
-        // 5. Delete unused ones (with dry-run support)
+
         var stats = new ProcessingStats();
         foreach (var unusedConnRef in unusedConnRefs)
         {
@@ -241,7 +241,7 @@ public class ConnectionReferenceProcessor
             }
         }
 
-        // Print summary
+
         Console.WriteLine("\n--- CLEANUP SUMMARY ---");
         Console.WriteLine($"Connection References Deleted: {stats.DeletedConnRefCount} (Errors: {stats.DeletedConnRefErrorCount})");
         Console.WriteLine($"Connection References Kept (In Use): {inUseConnRefs.Count}");
@@ -390,7 +390,7 @@ public class ConnectionReferenceProcessor
 
     private async Task<string?> CreateConnectionReferenceAsync(HttpClient httpClient, string logicalName, string displayName, string connectionId, string connectorId)
     {
-        // First check if it already exists
+
         var existingId = await QueryConnectionReferenceIdAsync(httpClient, logicalName);
         if (!string.IsNullOrEmpty(existingId))
         {
@@ -419,7 +419,7 @@ public class ConnectionReferenceProcessor
             return null;
         }
 
-        // Extract ID from response
+
         if (resp.StatusCode == System.Net.HttpStatusCode.NoContent)
         {
             if (resp.Headers.TryGetValues("OData-EntityId", out var entityIdValues))
@@ -454,11 +454,11 @@ public class ConnectionReferenceProcessor
     {
         Console.WriteLine($"[DEBUG] Adding connection reference to solution - ID: {connRefId}, LogicalName: {logicalName}");
 
-        // Try the newer component type first (10132)
+
         if (await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10132))
             return true;
 
-        // Fall back to the older component type (10469)
+
         Console.WriteLine($"[INFO] Retrying with alternative component type for '{logicalName}'");
         return await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10469);
     }
@@ -486,7 +486,7 @@ public class ConnectionReferenceProcessor
             return true;
         }
 
-        // Log the failure but don't error - we might try another component type
+
         var errorBody = await resp.Content.ReadAsStringAsync();
         Console.WriteLine($"[DEBUG] Component type {componentType} failed for '{logicalName}': {resp.StatusCode} - {errorBody}");
         return false;
@@ -654,19 +654,12 @@ public class ConnectionReferenceProcessor
         return input.Length <= maxLength ? input : input.Substring(0, maxLength - 3) + "...";
     }
 
-    private class ConnectionReferenceDetails
-    {
-        public string Id { get; set; } = string.Empty;
-        public string ConnectionId { get; set; } = string.Empty;
-    }
-
-    // ...existing code...
     public async Task AnalyzeAsync(string solutionName, OutputFormat format = OutputFormat.Vertical, string? outputPath = null)
     {
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
 
-        // Build analysis result
+
         var analysisResult = new AnalysisResult
         {
             SolutionName = solutionName,
@@ -701,7 +694,7 @@ public class ConnectionReferenceProcessor
             analysisResult.Flows.Add(flowAnalysis);
         }
 
-        // Output based on format
+
         switch (format)
         {
             case OutputFormat.Table:
@@ -732,7 +725,7 @@ public class ConnectionReferenceProcessor
         }
         else
         {
-            // Header
+
             output.AppendLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
             output.AppendLine(new string('-', 235));
 
@@ -834,14 +827,14 @@ public class ConnectionReferenceProcessor
     {
         var output = new StringBuilder();
 
-        // CSV Header
+
         output.AppendLine("FlowId,FlowName,ConnectionReferenceId,LogicalName,Provider,ConnectionId");
 
         foreach (var flow in analysisResult.Flows)
         {
             if (flow.ConnectionReferences.Count == 0)
             {
-                // Add row for flow with no connection references
+
                 output.AppendLine($"\"{flow.FlowId}\",\"{EscapeCsv(flow.FlowName)}\",\"\",\"\",\"\",\"\"");
             }
             else
@@ -871,7 +864,7 @@ public class ConnectionReferenceProcessor
         if (string.IsNullOrEmpty(value))
             return value;
 
-        // Escape quotes by doubling them
+
         return value.Replace("\"", "\"\"");
     }
     private async Task OutputJsonAsync(AnalysisResult analysisResult, string? outputPath)
@@ -882,7 +875,7 @@ public class ConnectionReferenceProcessor
             NullValueHandling = NullValueHandling.Include
         };
 
-        // Create a structured object for JSON output
+
         var jsonOutput = new
         {
             SolutionName = analysisResult.SolutionName,
@@ -922,26 +915,6 @@ public class ConnectionReferenceProcessor
         }
     }
 
-    private class AnalysisResult
-    {
-        public string SolutionName { get; set; } = string.Empty;
-        public List<FlowAnalysis> Flows { get; set; } = new List<FlowAnalysis>();
-    }
-
-    private class FlowAnalysis
-    {
-        public string FlowId { get; set; } = string.Empty;
-        public string FlowName { get; set; } = string.Empty;
-        public List<ConnectionReferenceAnalysis> ConnectionReferences { get; set; } = new List<ConnectionReferenceAnalysis>();
-    }
-
-    private class ConnectionReferenceAnalysis
-    {
-        public string ConnectionReferenceId { get; set; } = string.Empty;
-        public string LogicalName { get; set; } = string.Empty;
-        public string Provider { get; set; } = string.Empty; public string ConnectionId { get; set; } = string.Empty;
-    }
-
     private async Task<List<ConnectionReferenceInfo>> GetConnectionReferencesInSolutionAsync(HttpClient httpClient, string solutionName)
     {
         var fetchXml = $@"
@@ -964,7 +937,7 @@ public class ConnectionReferenceProcessor
 
         var requestUri = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?fetchXml={Uri.EscapeDataString(fetchXml)}";
         var results = await GetAllPagesAsync(httpClient, requestUri);
-        
+
         return results.Select(cr => new ConnectionReferenceInfo
         {
             Id = cr["connectionreferenceid"]?.ToString() ?? "",
@@ -978,14 +951,14 @@ public class ConnectionReferenceProcessor
     private Dictionary<string, List<string>> BuildConnectionReferenceDependencyMap(List<JObject> flows)
     {
         var dependencyMap = new Dictionary<string, List<string>>();
-        
+
         foreach (var flow in flows)
         {
             var flowInfo = ExtractFlowInfo(flow);
             if (flowInfo == null) continue;
 
             var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
-            
+
             foreach (var connRef in connectionRefs)
             {
                 if (!string.IsNullOrEmpty(connRef.LogicalName))
@@ -998,7 +971,7 @@ public class ConnectionReferenceProcessor
                 }
             }
         }
-        
+
         return dependencyMap;
     }
 
@@ -1024,14 +997,5 @@ public class ConnectionReferenceProcessor
             Console.WriteLine($"[ERROR] Exception deleting connection reference '{connectionRef.LogicalName}': {ex.Message}");
             return false;
         }
-    }
-
-    private class ConnectionReferenceInfo
-    {
-        public string Id { get; set; } = string.Empty;
-        public string LogicalName { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public string ConnectionId { get; set; } = string.Empty;
-        public string ConnectorId { get; set; } = string.Empty;
     }
 }

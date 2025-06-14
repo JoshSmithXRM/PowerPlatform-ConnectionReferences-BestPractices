@@ -17,7 +17,7 @@ public class AuthenticationService
     public async Task<HttpClient> GetAuthenticatedHttpClientAsync()
     {
         var token = await GetAccessTokenAsync();
-        
+
         var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
@@ -56,7 +56,9 @@ public class AuthenticationService
 
         var result = await app.AcquireTokenForClient(scopes).ExecuteAsync();
         return result.AccessToken;
-    }    private async Task<string> GetInteractiveTokenAsync(string[] scopes)
+    }
+
+    private async Task<string> GetInteractiveTokenAsync(string[] scopes)
     {
         var cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerPlatformConnectionRefTool");
         Directory.CreateDirectory(cacheDirectory);
@@ -74,7 +76,7 @@ public class AuthenticationService
 
         try
         {
-            // Try to get token silently first
+
             var accounts = await app.GetAccountsAsync();
             if (accounts.Any())
             {
@@ -85,16 +87,18 @@ public class AuthenticationService
         }
         catch (MsalUiRequiredException)
         {
-            // Interactive login required
+
         }
 
-        // Interactive login required
+
         Console.WriteLine("Opening browser for authentication...");
         var interactiveResult = await app.AcquireTokenInteractive(scopes)
             .WithPrompt(Prompt.SelectAccount)
             .ExecuteAsync();
         return interactiveResult.AccessToken;
-    }private async Task<string> GetUsernamePasswordTokenAsync(string[] scopes)
+    }
+
+    private async Task<string> GetUsernamePasswordTokenAsync(string[] scopes)
     {
         if (string.IsNullOrEmpty(_settings.Username) || string.IsNullOrEmpty(_settings.Password))
         {
@@ -108,7 +112,7 @@ public class AuthenticationService
 
         var result = await app.AcquireTokenByUsernamePassword(scopes, _settings.Username, _settings.Password)
             .ExecuteAsync();
-        
+
         return result.AccessToken;
     }
 

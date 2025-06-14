@@ -10,7 +10,6 @@ public class ProcessingStats
     public int UpdatedFlowErrorCount { get; set; }
     public int DeletedConnRefCount { get; set; }
     public int DeletedConnRefErrorCount { get; set; }
-    
-    public int TotalErrors => CreatedConnRefErrorCount + AddedToSolutionErrorCount + 
-                              UpdatedFlowErrorCount + DeletedConnRefErrorCount;
+
+    public int TotalErrors => CreatedConnRefErrorCount + AddedToSolutionErrorCount + UpdatedFlowErrorCount + DeletedConnRefErrorCount;
 }

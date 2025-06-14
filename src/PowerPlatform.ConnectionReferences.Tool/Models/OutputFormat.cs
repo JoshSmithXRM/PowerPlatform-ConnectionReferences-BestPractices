@@ -3,7 +3,7 @@ namespace PowerPlatform.ConnectionReferences.Tool.Models;
 public enum OutputFormat
 {
     Table,
-    Vertical, 
+    Vertical,
     Csv,
     Json
 }
