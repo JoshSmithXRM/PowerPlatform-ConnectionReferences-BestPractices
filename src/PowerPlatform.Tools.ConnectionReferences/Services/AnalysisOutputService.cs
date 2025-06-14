@@ -20,7 +20,7 @@ public class AnalysisOutputService : IAnalysisOutputService
         else
         {
             output.AppendLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
-            output.AppendLine(new string('-', 235));
+            output.AppendLine(new string('-', SeparatorLength));
 
             foreach (var flow in analysisResult.Flows)
             {
