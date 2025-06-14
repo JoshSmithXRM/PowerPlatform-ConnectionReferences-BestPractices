@@ -387,3 +387,62 @@ Desired behavior: Each connection reference → Different connection
 - Monitor for connection throttling in high-usage scenarios
 - Consider distributing flows across multiple connections for the same service
 - Review connection reference topology for optimization opportunities
+
+## Related Documentation
+
+### Microsoft Official Documentation
+
+#### Application Lifecycle Management (ALM)
+- [Power Platform ALM Overview](https://learn.microsoft.com/en-us/power-platform/alm/overview-alm) - Comprehensive guide to ALM with Power Platform
+- [ALM Basics with Power Platform](https://learn.microsoft.com/en-us/power-platform/alm/basics-alm) - Fundamental ALM concepts and best practices
+- [Environment Strategy for ALM](https://learn.microsoft.com/en-us/power-platform/alm/environment-strategy-alm) - Planning development, test, and production environments
+- [Solution Concepts](https://learn.microsoft.com/en-us/power-platform/alm/solution-concepts-alm) - Understanding managed vs unmanaged solutions
+- [Use DevOps for Automation](https://learn.microsoft.com/en-us/power-platform/alm/use-devops-automated-alm) - Implementing CI/CD pipelines
+
+#### Connection References
+- [Use Connection References in Solutions](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/create-connection-reference) - Complete guide to connection references
+- [Share Connections with Service Principals](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/create-connection-reference#share-connections-with-another-user-so-flows-can-be-enabled) - Service principal permission setup
+- [Connection Reference Naming](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/create-connection-reference#connection-reference-naming) - Naming best practices
+- [Update Flows to Use Connection References](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/create-connection-reference#update-a-flow-to-use-connection-references-instead-of-connections) - Migration guidance
+
+#### Environment Variables (Complementary to Connection References)
+- [Environment Variables Overview](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/environmentvariables) - Configuration management for environments
+- [Environment Variables in ALM](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/environmentvariables#enter-new-values-while-importing-solutions) - Using environment variables in deployment
+
+#### Power Platform Pipelines
+- [Deploy Solutions using Pipelines](https://learn.microsoft.com/en-us/power-platform/alm/pipelines) - Automated deployment with Power Platform pipelines
+- [Power Platform Build Tools for Azure DevOps](https://learn.microsoft.com/en-us/power-platform/alm/devops-build-tools) - Azure DevOps integration
+- [GitHub Actions for Power Platform](https://learn.microsoft.com/en-us/power-platform/alm/devops-github-actions) - GitHub-based CI/CD
+
+#### Solution Management
+- [Work with Solutions](https://learn.microsoft.com/en-us/powerapps/maker/data-platform/solutions-overview) - Solution fundamentals
+- [Import and Export Solutions](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/import-update-export-solutions) - Solution lifecycle management
+- [Solution Layers](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/solution-layers) - Understanding solution layering and customizations
+
+#### Authentication and Security
+- [Power Platform Admin Guide](https://learn.microsoft.com/en-us/power-platform/admin/admin-documentation) - Security and governance
+- [Service Principal Authentication](https://learn.microsoft.com/en-us/power-platform/admin/powershell-create-service-principal) - Setting up automation accounts
+- [Power Platform Security](https://learn.microsoft.com/en-us/power-platform/admin/wp-security) - Security best practices
+
+#### Power Automate Specific
+- [Solution-Aware Cloud Flows](https://learn.microsoft.com/en-us/power-automate/overview-solution-flows) - Working with flows in solutions
+- [Manage Connections](https://learn.microsoft.com/en-us/power-automate/add-manage-connections) - Connection management fundamentals
+- [Share Flow Resources](https://learn.microsoft.com/en-us/power-apps/maker/canvas-apps/share-app-resources#connections) - Sharing connections and flows
+
+### Community Resources
+
+#### Power Platform Community
+- [Power Platform Community](https://powerusers.microsoft.com/) - Community forums and discussions
+- [Power Platform Blog](https://powerplatform.microsoft.com/en-us/blog/) - Latest announcements and best practices
+- [Power CAT (Customer Advisory Team)](https://learn.microsoft.com/en-us/power-platform/guidance/) - Advanced guidance and patterns
+
+#### Learning Resources
+- [Power Platform Learning Paths](https://learn.microsoft.com/en-us/training/powerplatform/) - Microsoft Learn training modules
+- [ALM Learning Path](https://learn.microsoft.com/en-us/training/paths/power-platform-alm/) - Comprehensive ALM training
+- [Power Platform Fundamentals](https://learn.microsoft.com/en-us/training/paths/power-plat-fundamentals/) - Foundation concepts
+
+### Tools and Utilities
+- [Power Platform CLI](https://learn.microsoft.com/en-us/power-platform/developer/cli/introduction) - Command-line tools for Power Platform
+- [Solution Packager](https://learn.microsoft.com/en-us/power-platform/alm/solution-packager-tool) - Solution packaging and source control
+- [Configuration Migration Tool](https://learn.microsoft.com/en-us/power-platform/admin/manage-configuration-data) - Data migration between environments
+- [Power Platform Center of Excellence (CoE) Kit](https://learn.microsoft.com/en-us/power-platform/guidance/coe/starter-kit) - Governance and monitoring tools
