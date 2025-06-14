@@ -20,29 +20,63 @@ public class ConnectionReferenceProcessor
         config.GetSection("ConnectionReferences").Bind(_settings.ConnectionReferences);
         
         _authService = new AuthenticationService(_settings.PowerPlatform);
-    }
-
-    public async Task AnalyzeAsync(string solutionName)
+    }    public async Task AnalyzeAsync(string solutionName)
     {
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
         
         Console.WriteLine($"[INFO] Found {flows.Count} cloud flows in solution '{solutionName}'");
+        Console.WriteLine();
         
+        if (flows.Count == 0)
+        {
+            Console.WriteLine("No flows found in the solution.");
+            return;
+        }
+
+        // Print header
+        Console.WriteLine("=== FLOW AND CONNECTION REFERENCE ANALYSIS ===");
+        Console.WriteLine();        Console.WriteLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
+        Console.WriteLine(new string('-', 235));
+
         foreach (var flow in flows)
         {
             var flowInfo = ExtractFlowInfo(flow);
             if (flowInfo == null) continue;
 
-            Console.WriteLine($"\n[INFO] Flow: {flowInfo.Name} (ID: {flowInfo.Id})");
             var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
-            Console.WriteLine($"[INFO] Found {connectionRefs.Count} connection references:");
             
+            if (connectionRefs.Count == 0)
+            {
+                Console.WriteLine($"{flowInfo.Id,-38} | {TruncateString(flowInfo.Name, 25),-25} | {"(No connection references)",-38} | {"",-50} | {"",-35} | {"",-38}");
+                continue;
+            }
+
+            bool firstRef = true;
             foreach (var connRef in connectionRefs)
             {
-                Console.WriteLine($"  - {connRef.ApiName} (Current: {connRef.LogicalName})");
+                // Get detailed connection reference information
+                var connRefDetails = await GetConnectionReferenceDetailsAsync(context, connRef.LogicalName);
+                
+                string flowIdDisplay = firstRef ? flowInfo.Id : "";                string flowNameDisplay = firstRef ? TruncateString(flowInfo.Name, 25) : "";
+                
+                Console.WriteLine($"{flowIdDisplay,-38} | {flowNameDisplay,-25} | {connRefDetails?.Id ?? "Unknown",-38} | {connRef.LogicalName,-50} | {TruncateString(connRef.ApiName, 35),-35} | {connRefDetails?.ConnectionId ?? "Not Set",-38}");
+                
+                firstRef = false;
+            }
+              if (connectionRefs.Count > 1)
+            {
+                Console.WriteLine(new string('-', 235));
             }
         }
+        
+        Console.WriteLine();
+        Console.WriteLine("=== SUMMARY ===");
+        Console.WriteLine($"Total Flows: {flows.Count}");
+        Console.WriteLine($"Total Connection References: {flows.Sum(f => {
+            var flowInfo = ExtractFlowInfo(f);
+            return flowInfo != null ? GetConnectionReferences(flowInfo.ClientData).Count : 0;
+        })}");
     }
 
     public async Task CreateConnectionReferencesAsync(string solutionName, bool dryRun)
@@ -493,4 +527,54 @@ public class ConnectionReferenceProcessor
         Console.WriteLine($"Connection References Deleted: {stats.DeletedConnRefCount} (Errors: {stats.DeletedConnRefErrorCount})");
         Console.WriteLine($"Total Errors: {stats.TotalErrors}");
     }
+
+    private async Task<ConnectionReferenceDetails?> GetConnectionReferenceDetailsAsync(HttpClient httpClient, string logicalName)
+    {
+        try
+        {
+            var queryUrl = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?$select=connectionreferenceid,connectionreferencelogicalname,connectionid&$filter=connectionreferencelogicalname eq '{logicalName}'";
+            var resp = await httpClient.GetAsync(queryUrl);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[ERROR] Failed to query connection reference '{logicalName}'. Status: {resp.StatusCode}");
+                return null;
+            }
+
+            var content = await resp.Content.ReadAsStringAsync();
+            var result = JObject.Parse(content);
+            var connRefs = result["value"] as JArray;
+
+            if (connRefs == null || connRefs.Count == 0)
+                return new ConnectionReferenceDetails { Id = "Not Found", ConnectionId = "Not Found" };
+
+            var connRef = connRefs[0];
+            return new ConnectionReferenceDetails
+            {
+                Id = connRef["connectionreferenceid"]?.ToString() ?? "Unknown",
+                ConnectionId = connRef["connectionid"]?.ToString() ?? "Not Set"
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Exception querying connection reference '{logicalName}': {ex.Message}");
+            return new ConnectionReferenceDetails { Id = "Error", ConnectionId = "Error" };
+        }
+    }
+
+    private static string TruncateString(string input, int maxLength)
+    {
+        if (string.IsNullOrEmpty(input))
+            return "";
+        
+        return input.Length <= maxLength ? input : input.Substring(0, maxLength - 3) + "...";
+    }
+
+    private class ConnectionReferenceDetails
+    {
+        public string Id { get; set; } = string.Empty;
+        public string ConnectionId { get; set; } = string.Empty;
+    }
+
+    // ...existing code...
 }
