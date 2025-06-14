@@ -998,4 +998,10 @@ public partial class ConnectionReferenceProcessor
             return false;
         }
     }
+
+    private class ConnectionReferenceDetails
+    {
+        public string Id { get; set; } = string.Empty;
+        public string ConnectionId { get; set; } = string.Empty;
+    }
 }

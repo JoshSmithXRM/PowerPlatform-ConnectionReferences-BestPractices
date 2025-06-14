@@ -1,5 +1,3 @@
-using Newtonsoft.Json.Linq;
-
 namespace PowerPlatform.ConnectionReferences.Tool.Models;
 
 public class ConnectionReferenceResult
