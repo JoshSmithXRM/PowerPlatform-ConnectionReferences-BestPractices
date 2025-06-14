@@ -98,7 +98,7 @@ public class AnalysisOutputService : IAnalysisOutputService
                         output.AppendLine();
                     }
                 }
-                output.AppendLine(new string('-', 80));
+                output.AppendLine(new string('-', SeparatorWidth));
                 output.AppendLine();
             }
         }
