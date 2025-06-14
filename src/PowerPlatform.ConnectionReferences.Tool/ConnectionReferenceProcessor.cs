@@ -176,12 +176,66 @@ public class ConnectionReferenceProcessor
 
         await File.WriteAllTextAsync(outputPath, deploymentSettings.ToString(Formatting.Indented));
         Console.WriteLine($"[INFO] Deployment settings written to {outputPath}");
-    }
-
-    public async Task CleanupAsync(string solutionName, bool dryRun)
+    }    public async Task CleanupAsync(string solutionName, bool dryRun)
     {
-        Console.WriteLine("[INFO] Cleanup functionality not yet implemented");
-        await Task.CompletedTask;
+        var context = await InitializeContextAsync();
+        
+        Console.WriteLine($"[INFO] Starting cleanup for solution '{solutionName}'");
+        
+        // 1. Get all connection references in solution
+        var connectionRefs = await GetConnectionReferencesInSolutionAsync(context, solutionName);
+        Console.WriteLine($"[INFO] Found {connectionRefs.Count} connection references in solution");
+        
+        // 2. Get all flows in solution 
+        var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
+        Console.WriteLine($"[INFO] Found {flows.Count} flows in solution");
+        
+        // 3. Build dependency map (which flows use which connection references)
+        var dependencyMap = BuildConnectionReferenceDependencyMap(flows);
+        Console.WriteLine($"[INFO] Found {dependencyMap.Count} connection references in use by flows");
+        
+        // 4. Identify unused connection references
+        var unusedConnRefs = connectionRefs.Where(cr => !dependencyMap.ContainsKey(cr.LogicalName)).ToList();
+        var inUseConnRefs = connectionRefs.Where(cr => dependencyMap.ContainsKey(cr.LogicalName)).ToList();
+        
+        Console.WriteLine($"[INFO] Connection references in use: {inUseConnRefs.Count}");
+        Console.WriteLine($"[INFO] Connection references unused: {unusedConnRefs.Count}");
+        
+        // Log which ones are in use
+        foreach (var inUseRef in inUseConnRefs)
+        {
+            var flowCount = dependencyMap[inUseRef.LogicalName].Count;
+            Console.WriteLine($"[IN USE] '{inUseRef.LogicalName}' used by {flowCount} flow(s)");
+        }
+        
+        // 5. Delete unused ones (with dry-run support)
+        var stats = new ProcessingStats();
+        foreach (var unusedConnRef in unusedConnRefs)
+        {
+            if (dryRun)
+            {
+                Console.WriteLine($"[DRY RUN] Would delete unused connection reference '{unusedConnRef.LogicalName}' (ID: {unusedConnRef.Id})");
+                stats.DeletedConnRefCount++;
+            }
+            else
+            {
+                var success = await DeleteConnectionReferenceAsync(context, unusedConnRef);
+                if (success)
+                {
+                    stats.DeletedConnRefCount++;
+                }
+                else
+                {
+                    stats.DeletedConnRefErrorCount++;
+                }
+            }
+        }
+        
+        // Print summary
+        Console.WriteLine("\n--- CLEANUP SUMMARY ---");
+        Console.WriteLine($"Connection References Deleted: {stats.DeletedConnRefCount} (Errors: {stats.DeletedConnRefErrorCount})");
+        Console.WriteLine($"Connection References Kept (In Use): {inUseConnRefs.Count}");
+        Console.WriteLine($"Total Errors: {stats.DeletedConnRefErrorCount}");
     }
     private async Task<HttpClient> InitializeContextAsync()
     {
@@ -876,5 +930,98 @@ public class ConnectionReferenceProcessor
         public string ConnectionReferenceId { get; set; } = string.Empty;
         public string LogicalName { get; set; } = string.Empty;
         public string Provider { get; set; } = string.Empty; public string ConnectionId { get; set; } = string.Empty;
+    }
+
+    private async Task<List<ConnectionReferenceInfo>> GetConnectionReferencesInSolutionAsync(HttpClient httpClient, string solutionName)
+    {
+        var fetchXml = $@"
+        <fetch>
+          <entity name='connectionreference'>
+            <attribute name='connectionreferenceid'/>
+            <attribute name='connectionreferencelogicalname'/>
+            <attribute name='connectionreferencedisplayname'/>
+            <attribute name='connectionid'/>
+            <attribute name='connectorid'/>
+            <link-entity name='solutioncomponent' from='objectid' to='connectionreferenceid' link-type='inner'>
+                <link-entity name='solution' from='solutionid' to='solutionid' link-type='inner'>
+                    <filter>
+                        <condition attribute='uniquename' operator='eq' value='{solutionName}'/>
+                    </filter>
+                </link-entity>
+            </link-entity>
+          </entity>
+        </fetch>";
+
+        var requestUri = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?fetchXml={Uri.EscapeDataString(fetchXml)}";
+        var results = await GetAllPagesAsync(httpClient, requestUri);
+        
+        return results.Select(cr => new ConnectionReferenceInfo
+        {
+            Id = cr["connectionreferenceid"]?.ToString() ?? "",
+            LogicalName = cr["connectionreferencelogicalname"]?.ToString() ?? "",
+            DisplayName = cr["connectionreferencedisplayname"]?.ToString() ?? "",
+            ConnectionId = cr["connectionid"]?.ToString() ?? "",
+            ConnectorId = cr["connectorid"]?.ToString() ?? ""
+        }).ToList();
+    }
+
+    private Dictionary<string, List<string>> BuildConnectionReferenceDependencyMap(List<JObject> flows)
+    {
+        var dependencyMap = new Dictionary<string, List<string>>();
+        
+        foreach (var flow in flows)
+        {
+            var flowInfo = ExtractFlowInfo(flow);
+            if (flowInfo == null) continue;
+
+            var connectionRefs = GetConnectionReferences(flowInfo.ClientData);
+            
+            foreach (var connRef in connectionRefs)
+            {
+                if (!string.IsNullOrEmpty(connRef.LogicalName))
+                {
+                    if (!dependencyMap.ContainsKey(connRef.LogicalName))
+                    {
+                        dependencyMap[connRef.LogicalName] = new List<string>();
+                    }
+                    dependencyMap[connRef.LogicalName].Add(flowInfo.Name);
+                }
+            }
+        }
+        
+        return dependencyMap;
+    }
+
+    private async Task<bool> DeleteConnectionReferenceAsync(HttpClient httpClient, ConnectionReferenceInfo connectionRef)
+    {
+        try
+        {
+            var resp = await httpClient.DeleteAsync($"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences({connectionRef.Id})");
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errorBody = await resp.Content.ReadAsStringAsync();
+                Console.WriteLine($"[ERROR] Failed to delete connection reference '{connectionRef.LogicalName}' (ID: {connectionRef.Id})");
+                Console.WriteLine($"[ERROR] Status: {resp.StatusCode}, Response: {errorBody}");
+                return false;
+            }
+
+            Console.WriteLine($"[DELETE] Successfully deleted connection reference '{connectionRef.LogicalName}' (ID: {connectionRef.Id})");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Exception deleting connection reference '{connectionRef.LogicalName}': {ex.Message}");
+            return false;
+        }
+    }
+
+    private class ConnectionReferenceInfo
+    {
+        public string Id { get; set; } = string.Empty;
+        public string LogicalName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string ConnectionId { get; set; } = string.Empty;
+        public string ConnectorId { get; set; } = string.Empty;
     }
 }
