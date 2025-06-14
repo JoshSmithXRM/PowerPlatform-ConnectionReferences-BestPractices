@@ -146,10 +146,8 @@ public class ConnectionReferenceProcessor
         var context = await InitializeContextAsync();
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
 
-        var deploymentSettings = new JObject
-        {
-            ["ConnectionReferences"] = new JObject()
-        };
+        var connectionReferences = new List<JObject>();
+        var processedLogicalNames = new HashSet<string>();
 
         foreach (var flow in flows)
         {
@@ -160,54 +158,66 @@ public class ConnectionReferenceProcessor
 
             foreach (var connRef in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)))
             {
-                var logicalName = GenerateLogicalName(connRef.ApiName, flowInfo.Id);
-                if (!deploymentSettings["ConnectionReferences"]!.HasValues ||
-                    deploymentSettings["ConnectionReferences"]![logicalName] == null)
+                var logicalName = GenerateLogicalName(connRef.ApiName, flowInfo.Id);                // Only add each logical name once
+                if (!processedLogicalNames.Contains(logicalName))
                 {
-                    deploymentSettings["ConnectionReferences"]![logicalName] = new JObject
+                    // Create a descriptive placeholder for ConnectionId to make find-and-replace easier
+                    var connectorName = connRef.ApiName.Replace("shared_", "");
+                    var connectionIdPlaceholder = $"{{{{REPLACE_WITH_{connectorName.ToUpper()}_CONNECTION_ID}}}}";
+                    
+                    connectionReferences.Add(new JObject
                     {
                         ["LogicalName"] = logicalName,
-                        ["ConnectionId"] = "",
+                        ["ConnectionId"] = connectionIdPlaceholder,
                         ["ConnectorId"] = _settings.ConnectionReferences.ProviderMappings.GetValueOrDefault(connRef.ApiName)?.ConnectorId ?? ""
-                    };
+                    });
+                    processedLogicalNames.Add(logicalName);
                 }
             }
         }
 
+        var deploymentSettings = new JObject
+        {
+            ["EnvironmentVariables"] = new JArray(),
+            ["ConnectionReferences"] = new JArray(connectionReferences)
+        };
+
         await File.WriteAllTextAsync(outputPath, deploymentSettings.ToString(Formatting.Indented));
         Console.WriteLine($"[INFO] Deployment settings written to {outputPath}");
-    }    public async Task CleanupAsync(string solutionName, bool dryRun)
+    }
+
+    public async Task CleanupAsync(string solutionName, bool dryRun)
     {
         var context = await InitializeContextAsync();
-        
+
         Console.WriteLine($"[INFO] Starting cleanup for solution '{solutionName}'");
-        
+
         // 1. Get all connection references in solution
         var connectionRefs = await GetConnectionReferencesInSolutionAsync(context, solutionName);
         Console.WriteLine($"[INFO] Found {connectionRefs.Count} connection references in solution");
-        
+
         // 2. Get all flows in solution 
         var flows = await GetCloudFlowsInSolutionAsync(context, solutionName);
         Console.WriteLine($"[INFO] Found {flows.Count} flows in solution");
-        
+
         // 3. Build dependency map (which flows use which connection references)
         var dependencyMap = BuildConnectionReferenceDependencyMap(flows);
         Console.WriteLine($"[INFO] Found {dependencyMap.Count} connection references in use by flows");
-        
+
         // 4. Identify unused connection references
         var unusedConnRefs = connectionRefs.Where(cr => !dependencyMap.ContainsKey(cr.LogicalName)).ToList();
         var inUseConnRefs = connectionRefs.Where(cr => dependencyMap.ContainsKey(cr.LogicalName)).ToList();
-        
+
         Console.WriteLine($"[INFO] Connection references in use: {inUseConnRefs.Count}");
         Console.WriteLine($"[INFO] Connection references unused: {unusedConnRefs.Count}");
-        
+
         // Log which ones are in use
         foreach (var inUseRef in inUseConnRefs)
         {
             var flowCount = dependencyMap[inUseRef.LogicalName].Count;
             Console.WriteLine($"[IN USE] '{inUseRef.LogicalName}' used by {flowCount} flow(s)");
         }
-        
+
         // 5. Delete unused ones (with dry-run support)
         var stats = new ProcessingStats();
         foreach (var unusedConnRef in unusedConnRefs)
@@ -230,7 +240,7 @@ public class ConnectionReferenceProcessor
                 }
             }
         }
-        
+
         // Print summary
         Console.WriteLine("\n--- CLEANUP SUMMARY ---");
         Console.WriteLine($"Connection References Deleted: {stats.DeletedConnRefCount} (Errors: {stats.DeletedConnRefErrorCount})");

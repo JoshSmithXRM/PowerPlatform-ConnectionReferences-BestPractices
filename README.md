@@ -45,6 +45,17 @@ dotnet run -- analyze --solution "MyFlows" --format csv --output "analysis.csv"
 dotnet run -- analyze --solution "MyFlows" --format json --output "analysis.json"
 ```
 
+**Analyze Output Details**:
+The analyze command provides comprehensive information about each flow's connection references:
+- **Flow ID**: Unique identifier of the Power Automate flow
+- **Flow Name**: Display name of the flow
+- **Connection Reference ID**: Unique ID of the connection reference
+- **Logical Name**: The logical name used to reference the connection in the flow
+- **Provider**: The connector type (e.g., `shared_commondataserviceforapps`, `shared_azuread`)
+- **Connection ID**: The actual connection being used
+
+This information helps identify which flows need to be updated and what standardized connection references should be created.
+
 ### Create Connection References
 Create new shared connection references for all connectors found in the solution:
 ```bash
@@ -69,11 +80,43 @@ Create a deployment settings JSON file for the solution's connection references:
 dotnet run -- generate-deployment-settings --solution "YourSolutionName" --output "deploymentsettings.json"
 ```
 
+## Deployment Settings Format
+
+The generated deployment settings file includes descriptive placeholders for easy find-and-replace operations in ALM processes:
+
+```json
+{
+  "EnvironmentVariables": [],
+  "ConnectionReferences": [
+    {
+      "LogicalName": "prefix_connector_flowid",
+      "ConnectionId": "{{REPLACE_WITH_CONNECTOR_CONNECTION_ID}}",
+      "ConnectorId": "/providers/Microsoft.PowerApps/apis/shared_connector"
+    }
+  ]
+}
+```
+
+**Placeholder Format**: Connection ID placeholders use the format `{{REPLACE_WITH_[CONNECTOR]_CONNECTION_ID}}` where `[CONNECTOR]` is the connector name in uppercase (e.g., `COMMONDATASERVICEFORAPPS`, `AZUREAD`, `SHAREPOINTONLINE`).
+
+**ALM Usage Examples**:
+- **PowerShell**: `$content -replace "{{REPLACE_WITH_DATAVERSE_CONNECTION_ID}}", $connectionId`
+- **Azure DevOps**: Use File Transform task with variable replacement
+- **Find/Replace**: Search for `{{REPLACE_WITH_` pattern and replace with actual connection IDs
+
+These placeholders make automated deployment processes much easier by providing clear, searchable tokens for connection ID replacement.
+
 ### Clean Up
-Remove old unused connection references:
+Remove old unused connection references (dependency-aware - only deletes connection references not used by any flows):
 ```bash
 dotnet run -- cleanup --solution "YourSolutionName" [--dry-run]
 ```
+
+**Safety Features**:
+- Analyzes all flows in the solution to identify connection reference dependencies
+- Only removes connection references that are not referenced by any flow
+- Provides detailed logging of what will be kept vs. deleted
+- Shows which flows are using each connection reference before deletion
 
 ## Configuration
 
@@ -140,6 +183,19 @@ dotnet run -- process --solution "MyCloudFlows"
 # Generate deployment settings for ALM
 dotnet run -- generate-deployment-settings --solution "MyCloudFlows" --output "release/deploymentsettings.json"
 ```
+
+## Troubleshooting
+
+### Component Type Compatibility
+The tool automatically handles different Dataverse environment versions by trying multiple component types when adding connection references to solutions:
+- First attempts with component type 10132 (newer environments)
+- Falls back to component type 10469 (older environments) if the first fails
+- This ensures compatibility across different Power Platform environment versions
+
+### Common Issues
+- **"Invalid component type" warnings**: These are handled automatically and don't prevent successful operation
+- **Authentication token expiry**: The tool uses token caching and will prompt for re-authentication when needed
+- **Connection reference already exists**: The tool detects existing connection references and reuses them instead of creating duplicates
 
 ## Best Practices
 

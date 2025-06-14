@@ -136,6 +136,34 @@ This tool supports 4 different authentication methods to connect to your Power P
 3. Enter the code and authenticate
 4. Tool continues after successful authentication
 
+## Token Caching
+
+For Interactive, Username/Password, and Device Code authentication methods, the tool automatically caches authentication tokens using MSAL token cache. This provides several benefits:
+
+**Features**:
+- **First run**: Requires full authentication (browser/credentials)
+- **Subsequent runs**: Uses cached tokens automatically (no re-authentication needed)
+- **Secure storage**: Cache is stored securely in the user profile using MSAL extensions
+- **Cross-session persistence**: Cache persists between application runs and system restarts
+- **Automatic refresh**: Tokens are automatically refreshed when possible before expiration
+- **Multiple environments**: Separate caches maintained for different tenants/environments
+
+**Cache Locations**:
+- **Windows**: `%LOCALAPPDATA%\.IdentityService`
+- **macOS**: `~/.IdentityService`
+- **Linux**: `~/.IdentityService`
+
+**Cache Behavior**:
+- Service Principal authentication does NOT use token caching (always authenticates fresh)
+- Interactive authentication caches tokens for the longest possible duration
+- Cache is automatically cleared if tokens become invalid or corrupted
+- First successful authentication after tool installation will establish the cache
+
+**Troubleshooting Cache Issues**:
+- Delete the cache directory to force fresh authentication
+- Check that the user has write permissions to the cache location
+- Ensure antivirus software isn't blocking cache file creation
+
 ## Field Reference
 
 | Field | Service Principal | Interactive | Username/Password | Device Code |
