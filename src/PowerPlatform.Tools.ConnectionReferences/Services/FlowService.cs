@@ -16,6 +16,12 @@ public class FlowService : IFlowService
         _dataverseService = dataverseService;
     }
 
+    private string BuildApiUrl(string endpoint)
+    {
+        var baseUrl = _settings.PowerPlatform.DataverseUrl.TrimEnd('/');
+        return $"{baseUrl}/api/data/v9.2/{endpoint.TrimStart('/')}";
+    }
+
     public async Task<List<JObject>> GetCloudFlowsInSolutionAsync(HttpClient httpClient, string solutionName)
     {
         var fetchXml = $@"
@@ -33,8 +39,7 @@ public class FlowService : IFlowService
                         <condition attribute='uniquename' operator='eq' value='{solutionName}'/>
                     </filter>
                 </link-entity>
-            </link-entity>
-        </entity></fetch>"; var requestUri = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/workflows?fetchXml={Uri.EscapeDataString(fetchXml)}";
+            </link-entity>        </entity></fetch>"; var requestUri = BuildApiUrl($"workflows?fetchXml={Uri.EscapeDataString(fetchXml)}");
         return await _dataverseService.GetAllPagesAsync(httpClient, requestUri);
     }
 
@@ -116,7 +121,7 @@ public class FlowService : IFlowService
                 ["clientdata"] = clientData.ToString(Formatting.None)
             };
 
-            var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/workflows({flow.Id})")
+            var request = new HttpRequestMessage(new HttpMethod("PATCH"), BuildApiUrl($"workflows({flow.Id})"))
             {
                 Content = new StringContent(updatePayload.ToString(), Encoding.UTF8, "application/json")
             };

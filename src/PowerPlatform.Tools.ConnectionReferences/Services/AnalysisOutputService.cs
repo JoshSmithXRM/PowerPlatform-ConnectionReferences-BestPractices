@@ -6,6 +6,9 @@ namespace PowerPlatform.Tools.ConnectionReferences.Services;
 
 public class AnalysisOutputService : IAnalysisOutputService
 {
+    private const int SeparatorLength = 228;
+    private const int SeparatorWidth = 80;
+
     public async Task OutputTableAsync(AnalysisResult analysisResult, string? outputPath)
     {
         var output = new StringBuilder();

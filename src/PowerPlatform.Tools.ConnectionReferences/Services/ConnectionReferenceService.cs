@@ -9,11 +9,18 @@ public class ConnectionReferenceService : IConnectionReferenceService
 {
     private readonly AppSettings _settings;
     private readonly IDataverseService _dataverseService;
+    private static readonly int[] SolutionComponentTypes = { 10132, 10469 };
 
     public ConnectionReferenceService(AppSettings settings, IDataverseService dataverseService)
     {
         _settings = settings;
         _dataverseService = dataverseService;
+    }
+
+    private string BuildApiUrl(string endpoint)
+    {
+        var baseUrl = _settings.PowerPlatform.DataverseUrl.TrimEnd('/');
+        return $"{baseUrl}/api/data/v9.2/{endpoint.TrimStart('/')}";
     }
 
     public async Task<string?> CreateConnectionReferenceAsync(HttpClient httpClient, string logicalName, string displayName, string connectionId, string connectorId)
@@ -34,7 +41,7 @@ public class ConnectionReferenceService : IConnectionReferenceService
         };
 
         var resp = await httpClient.PostAsync(
-            $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences",
+            BuildApiUrl("connectionreferences"),
             new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json")
         );
 
@@ -78,7 +85,7 @@ public class ConnectionReferenceService : IConnectionReferenceService
 
     public async Task<string?> QueryConnectionReferenceIdAsync(HttpClient httpClient, string logicalName)
     {
-        var queryUrl = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?$select=connectionreferenceid&$filter=connectionreferencelogicalname eq '{logicalName}'";
+        var queryUrl = BuildApiUrl($"connectionreferences?$select=connectionreferenceid&$filter=connectionreferencelogicalname eq '{logicalName}'");
         var resp = await httpClient.GetAsync(queryUrl);
 
         if (!resp.IsSuccessStatusCode)
@@ -117,7 +124,7 @@ public class ConnectionReferenceService : IConnectionReferenceService
           </entity>
         </fetch>";
 
-        var requestUri = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?fetchXml={Uri.EscapeDataString(fetchXml)}";
+        var requestUri = BuildApiUrl($"connectionreferences?fetchXml={Uri.EscapeDataString(fetchXml)}");
         var results = await _dataverseService.GetAllPagesAsync(httpClient, requestUri);
 
         return results.Select(cr => new ConnectionReferenceInfo
@@ -134,7 +141,7 @@ public class ConnectionReferenceService : IConnectionReferenceService
     {
         try
         {
-            var resp = await httpClient.DeleteAsync($"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences({connectionRef.Id})");
+            var resp = await httpClient.DeleteAsync(BuildApiUrl($"connectionreferences({connectionRef.Id})"));
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -158,11 +165,18 @@ public class ConnectionReferenceService : IConnectionReferenceService
     {
         Console.WriteLine($"[DEBUG] Adding connection reference to solution - ID: {connRefId}, LogicalName: {logicalName}");
 
-        if (await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10132))
-            return true;
+        // Try each component type in order until one succeeds
+        foreach (var componentType in SolutionComponentTypes)
+        {
+            Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'");
+            if (await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, componentType))
+                return true;
 
-        Console.WriteLine($"[INFO] Retrying with alternative component type for '{logicalName}'");
-        return await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10469);
+            Console.WriteLine($"[INFO] Component type {componentType} failed, trying next type for '{logicalName}'");
+        }
+
+        Console.WriteLine($"[ERROR] All component types failed for '{logicalName}'");
+        return false;
     }
 
     public async Task<ConnectionReferenceResult?> ProcessConnectionReferenceForProviderAsync(HttpClient httpClient, FlowInfo flow, string provider, ProcessingStats stats, bool dryRun, string solutionName)
@@ -231,10 +245,8 @@ public class ConnectionReferenceService : IConnectionReferenceService
             ["AddRequiredComponents"] = false
         };
 
-        Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'");
-
-        var resp = await httpClient.PostAsync(
-            $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/AddSolutionComponent",
+        Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'"); var resp = await httpClient.PostAsync(
+            BuildApiUrl("AddSolutionComponent"),
             new StringContent(payload.ToString(), Encoding.UTF8, "application/json")
         );
 

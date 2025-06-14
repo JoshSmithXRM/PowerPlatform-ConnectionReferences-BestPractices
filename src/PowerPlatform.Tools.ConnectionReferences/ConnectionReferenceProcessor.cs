@@ -11,20 +11,15 @@ public class ConnectionReferenceProcessor
     private readonly IFlowService _flowService;
     private readonly IConnectionReferenceService _connectionReferenceService;
     private readonly IAnalysisOutputService _analysisOutputService;
-    private readonly IDeploymentSettingsService _deploymentSettingsService;
-
-    public ConnectionReferenceProcessor(
-        IConfiguration config,
+    private readonly IDeploymentSettingsService _deploymentSettingsService; public ConnectionReferenceProcessor(
+        AppSettings settings,
         IDataverseService dataverseService,
         IFlowService flowService,
         IConnectionReferenceService connectionReferenceService,
         IAnalysisOutputService analysisOutputService,
         IDeploymentSettingsService deploymentSettingsService)
     {
-        _settings = new AppSettings();
-        config.GetSection("PowerPlatform").Bind(_settings.PowerPlatform);
-        config.GetSection("ConnectionReferences").Bind(_settings.ConnectionReferences);
-
+        _settings = settings;
         _dataverseService = dataverseService;
         _flowService = flowService;
         _connectionReferenceService = connectionReferenceService;
@@ -32,64 +27,16 @@ public class ConnectionReferenceProcessor
         _deploymentSettingsService = deploymentSettingsService;
     }
 
+    private string BuildApiUrl(string endpoint)
+    {
+        var baseUrl = _settings.PowerPlatform.DataverseUrl.TrimEnd('/');
+        return $"{baseUrl}/api/data/v9.2/{endpoint.TrimStart('/')}";
+    }
+
     public async Task AnalyzeAsync(string solutionName)
     {
-        var httpClient = await _dataverseService.GetAuthenticatedHttpClientAsync();
-        var flows = await _flowService.GetCloudFlowsInSolutionAsync(httpClient, solutionName);
-
-        Console.WriteLine($"[INFO] Found {flows.Count} cloud flows in solution '{solutionName}'");
-        Console.WriteLine();
-
-        if (flows.Count == 0)
-        {
-            Console.WriteLine("No flows found in the solution.");
-            return;
-        }
-
-        Console.WriteLine("=== FLOW AND CONNECTION REFERENCE ANALYSIS ===");
-        Console.WriteLine();
-        Console.WriteLine($"{"Flow ID",-38} | {"Flow Name",-25} | {"Conn Ref ID",-38} | {"Conn Ref Logical Name",-50} | {"Provider",-35} | {"Connection ID",-38}");
-        Console.WriteLine(new string('-', 235));
-
-        foreach (var flow in flows)
-        {
-            var flowInfo = _flowService.ExtractFlowInfo(flow);
-            if (flowInfo == null) continue;
-
-            var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
-
-            if (connectionRefs.Count == 0)
-            {
-                Console.WriteLine($"{flowInfo.Id,-38} | {_analysisOutputService.TruncateString(flowInfo.Name, 25),-25} | {"(No connection references)",-38} | {"",-50} | {"",-35} | {"",-38}");
-                continue;
-            }
-
-            bool firstRef = true;
-            foreach (var connRef in connectionRefs)
-            {
-                var connRefDetails = await GetConnectionReferenceDetailsAsync(httpClient, connRef.LogicalName);
-
-                string flowIdDisplay = firstRef ? flowInfo.Id : "";
-                string flowNameDisplay = firstRef ? _analysisOutputService.TruncateString(flowInfo.Name, 25) : "";
-
-                Console.WriteLine($"{flowIdDisplay,-38} | {flowNameDisplay,-25} | {connRefDetails?.Id ?? "Unknown",-38} | {connRef.LogicalName,-50} | {_analysisOutputService.TruncateString(connRef.ApiName, 35),-35} | {connRefDetails?.ConnectionId ?? "Not Set",-38}");
-
-                firstRef = false;
-            }
-            if (connectionRefs.Count > 1)
-            {
-                Console.WriteLine(new string('-', 235));
-            }
-        }
-
-        Console.WriteLine();
-        Console.WriteLine("=== SUMMARY ===");
-        Console.WriteLine($"Total Flows: {flows.Count}");
-        Console.WriteLine($"Total Connection References: {flows.Sum(f =>
-        {
-            var flowInfo = _flowService.ExtractFlowInfo(f);
-            return flowInfo != null ? _flowService.GetConnectionReferences(flowInfo.ClientData).Count : 0;
-        })}");
+        // Call the comprehensive overload with default parameters
+        await AnalyzeAsync(solutionName, OutputFormat.Table, outputPath: null);
     }
 
     public async Task AnalyzeAsync(string solutionName, OutputFormat format = OutputFormat.Vertical, string? outputPath = null)
@@ -272,7 +219,7 @@ public class ConnectionReferenceProcessor
     {
         try
         {
-            var queryUrl = $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/connectionreferences?$select=connectionreferenceid,connectionreferencelogicalname,connectionid&$filter=connectionreferencelogicalname eq '{logicalName}'";
+            var queryUrl = BuildApiUrl($"connectionreferences?$select=connectionreferenceid,connectionreferencelogicalname,connectionid&$filter=connectionreferencelogicalname eq '{logicalName}'");
             var resp = await httpClient.GetAsync(queryUrl);
 
             if (!resp.IsSuccessStatusCode)
