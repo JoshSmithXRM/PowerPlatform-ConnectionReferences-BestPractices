@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 
 namespace PowerPlatform.Tools.ConnectionReferences.Services;
 
-public class AuthenticationService
+public class AuthenticationService : IAuthenticationService
 {
     private readonly PowerPlatformSettings _settings;
 
@@ -68,7 +68,7 @@ public class AuthenticationService
             .Create(_settings.PublicClientId)
             .WithAuthority($"https://login.microsoftonline.com/{_settings.TenantId}")
             .WithRedirectUri("http://localhost")
-            .Build();        // Enable token cache persistence
+            .Build();
         var storageProperties = new StorageCreationPropertiesBuilder("msal_cache.dat", cacheDirectory)
             .Build();
         var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);

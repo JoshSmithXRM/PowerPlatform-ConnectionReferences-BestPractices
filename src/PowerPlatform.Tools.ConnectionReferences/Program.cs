@@ -1,5 +1,8 @@
 using System.CommandLine;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using PowerPlatform.Tools.ConnectionReferences.Models;
+using PowerPlatform.Tools.ConnectionReferences.Services;
 
 namespace PowerPlatform.Tools.ConnectionReferences;
 
@@ -35,6 +38,7 @@ class Program
         analyzeCommand.AddOption(formatOption);
         analyzeCommand.AddOption(outputOption);
         rootCommand.AddCommand(analyzeCommand);
+        analyzeCommand.SetHandler(async (solution, format, output) => await ExecuteCommand("analyze", solution, false, output, format), solutionOption, formatOption, outputOption);
 
         var createRefsCommand = new Command("create-refs", "Create new shared connection references");
         createRefsCommand.AddOption(solutionOption);
@@ -63,7 +67,7 @@ class Program
         var cleanupCommand = new Command("cleanup", "Remove old unused connection references");
         cleanupCommand.AddOption(solutionOption);
         cleanupCommand.AddOption(dryRunOption);
-        rootCommand.AddCommand(cleanupCommand); analyzeCommand.SetHandler(async (solution, format, output) => await ExecuteCommand("analyze", solution, false, output, format), solutionOption, formatOption, outputOption);
+        rootCommand.AddCommand(cleanupCommand);
         cleanupCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("cleanup", solution, dryRun, null), solutionOption, dryRunOption);
 
         return await rootCommand.InvokeAsync(args);
@@ -74,7 +78,8 @@ class Program
         try
         {
             var config = LoadConfiguration();
-            var processor = new ConnectionReferenceProcessor(config);
+            var serviceProvider = BuildServiceProvider(config);
+            var processor = serviceProvider.GetRequiredService<ConnectionReferenceProcessor>();
 
             Console.WriteLine($"=== Power Platform Connection References Tool ===");
             Console.WriteLine($"Command: {command}");
@@ -134,5 +139,36 @@ class Program
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .Build();
+    }
+
+    static IServiceProvider BuildServiceProvider(IConfiguration config)
+    {
+        var services = new ServiceCollection();
+
+        services.AddSingleton(config);
+
+        services.AddSingleton<AppSettings>(provider =>
+        {
+            var settings = new AppSettings();
+            config.GetSection("PowerPlatform").Bind(settings.PowerPlatform);
+            config.GetSection("ConnectionReferences").Bind(settings.ConnectionReferences);
+            return settings;
+        });
+
+        services.AddSingleton<IAuthenticationService, AuthenticationService>(provider =>
+        {
+            var settings = provider.GetRequiredService<AppSettings>();
+            return new AuthenticationService(settings.PowerPlatform);
+        });
+
+        services.AddSingleton<IDataverseService, DataverseService>();
+        services.AddSingleton<IFlowService, FlowService>();
+        services.AddSingleton<IConnectionReferenceService, ConnectionReferenceService>();
+        services.AddSingleton<IAnalysisOutputService, AnalysisOutputService>();
+        services.AddSingleton<IDeploymentSettingsService, DeploymentSettingsService>();
+
+        services.AddSingleton<ConnectionReferenceProcessor>();
+
+        return services.BuildServiceProvider();
     }
 }
