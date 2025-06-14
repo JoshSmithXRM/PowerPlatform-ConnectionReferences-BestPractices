@@ -385,44 +385,47 @@ public class ConnectionReferenceProcessor
 
         return null;
     }
+
     private async Task<bool> AddConnectionReferenceToSolutionAsync(HttpClient httpClient, string connRefId, string logicalName, string solutionName)
     {
         Console.WriteLine($"[DEBUG] Adding connection reference to solution - ID: {connRefId}, LogicalName: {logicalName}");
 
+        // Try the newer component type first (10132)
+        if (await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10132))
+            return true;
+
+        // Fall back to the older component type (10469)
+        Console.WriteLine($"[INFO] Retrying with alternative component type for '{logicalName}'");
+        return await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, 10469);
+    }
+
+    private async Task<bool> TryAddWithComponentType(HttpClient httpClient, string connRefId, string logicalName, string solutionName, int componentType)
+    {
         var payload = new JObject
         {
             ["ComponentId"] = connRefId,
-            ["ComponentType"] = 10469,
+            ["ComponentType"] = componentType,
             ["SolutionUniqueName"] = solutionName,
             ["AddRequiredComponents"] = false
         };
 
-        Console.WriteLine($"[DEBUG] Payload: {payload}");
+        Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'");
 
         var resp = await httpClient.PostAsync(
             $"{_settings.PowerPlatform.DataverseUrl}/api/data/v9.2/AddSolutionComponent",
             new StringContent(payload.ToString(), Encoding.UTF8, "application/json")
-        ); if (!resp.IsSuccessStatusCode)
+        );
+
+        if (resp.IsSuccessStatusCode)
         {
-            var errorBody = await resp.Content.ReadAsStringAsync();
-
-            // Check if this is the known "Invalid component type" error that actually succeeds
-            if (resp.StatusCode == System.Net.HttpStatusCode.BadRequest &&
-                errorBody.Contains("Invalid component type provided 10469"))
-            {
-                Console.WriteLine($"[WARNING] Received 'Invalid component type' error for '{logicalName}', but connection reference may have been added successfully");
-                Console.WriteLine($"[WARNING] Status: {resp.StatusCode}, Response: {errorBody}");
-                // Return true since this error often occurs even when the operation succeeds
-                return true;
-            }
-
-            Console.WriteLine($"[ERROR] Failed to add connection reference '{logicalName}' to solution");
-            Console.WriteLine($"[ERROR] Status: {resp.StatusCode}, Response: {errorBody}");
-            return false;
+            Console.WriteLine($"[ADD] Successfully added connection reference '{logicalName}' to solution '{solutionName}' using component type {componentType}");
+            return true;
         }
 
-        Console.WriteLine($"[ADD] Successfully added connection reference '{logicalName}' to solution '{solutionName}'");
-        return true;
+        // Log the failure but don't error - we might try another component type
+        var errorBody = await resp.Content.ReadAsStringAsync();
+        Console.WriteLine($"[DEBUG] Component type {componentType} failed for '{logicalName}': {resp.StatusCode} - {errorBody}");
+        return false;
     }
 
     private async Task<List<string>> UpdateFlowConnectionReferencesAsync(HttpClient httpClient, FlowInfo flow, Dictionary<string, string> newConnRefLogicalNames, ProcessingStats stats, bool dryRun)
