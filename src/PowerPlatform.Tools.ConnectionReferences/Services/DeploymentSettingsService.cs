@@ -27,16 +27,18 @@ public class DeploymentSettingsService : IDeploymentSettingsService
 
         foreach (var connectionRef in connectionReferences)
         {
-            var connectorName = ExtractConnectorNameFromId(connectionRef.ConnectorId);
-            var connectionIdPlaceholder = $"{{{{REPLACE_WITH_{connectorName.ToUpper()}_CONNECTION_ID}}}}";
 
             deploymentConnectionReferences.Add(new JObject
             {
                 ["LogicalName"] = connectionRef.LogicalName,
-                ["ConnectionId"] = connectionIdPlaceholder,
+                ["ConnectionId"] = connectionRef.ConnectionId,
                 ["ConnectorId"] = connectionRef.ConnectorId
             });
         }
+
+        deploymentConnectionReferences = deploymentConnectionReferences
+            .OrderBy(cr => cr["LogicalName"]?.ToString())
+            .ToList();
 
         var deploymentSettings = new JObject
         {
@@ -45,6 +47,7 @@ public class DeploymentSettingsService : IDeploymentSettingsService
         };
 
         await File.WriteAllTextAsync(outputPath, deploymentSettings.ToString(Formatting.Indented));
+        Console.WriteLine($"[INFO] Generated deployment settings with {deploymentConnectionReferences.Count} connection references: {outputPath}");
     }
 
     private string ExtractConnectorNameFromId(string connectorId)
