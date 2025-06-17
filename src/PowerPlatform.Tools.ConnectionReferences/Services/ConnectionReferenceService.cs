@@ -165,7 +165,6 @@ public class ConnectionReferenceService : IConnectionReferenceService
     {
         Console.WriteLine($"[DEBUG] Adding connection reference to solution - ID: {connRefId}, LogicalName: {logicalName}");
 
-        // Try each component type in order until one succeeds
         foreach (var componentType in SolutionComponentTypes)
         {
             Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'");

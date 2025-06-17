@@ -35,7 +35,6 @@ public class ConnectionReferenceProcessor
 
     public async Task AnalyzeAsync(string solutionName)
     {
-        // Call the comprehensive overload with default parameters
         await AnalyzeAsync(solutionName, OutputFormat.Table, outputPath: null);
     }
 
@@ -113,16 +112,16 @@ public class ConnectionReferenceProcessor
                 var expectedLogicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
                 var needsNewConnectionRef = providerGroup.Any(cr =>
                     string.IsNullOrEmpty(cr.LogicalName) ||
-                    !cr.LogicalName.StartsWith($"{_settings.ConnectionReferences.Prefix}_", StringComparison.OrdinalIgnoreCase));
+                    !cr.LogicalName.Equals(expectedLogicalName, StringComparison.OrdinalIgnoreCase));
 
                 if (needsNewConnectionRef)
                 {
-                    Console.WriteLine($"[INFO] {flowInfo.Name}: Processing provider '{providerGroup.Key}'");
+                    Console.WriteLine($"[INFO] {flowInfo.Name}: Processing provider '{providerGroup.Key}' - expected: '{expectedLogicalName}'");
                     await _connectionReferenceService.ProcessConnectionReferenceForProviderAsync(httpClient, flowInfo, providerGroup.Key, stats, dryRun, solutionName);
                 }
                 else
                 {
-                    Console.WriteLine($"[INFO] {flowInfo.Name}: Skipping provider '{providerGroup.Key}' - already follows naming pattern");
+                    Console.WriteLine($"[INFO] {flowInfo.Name}: Skipping provider '{providerGroup.Key}' - already matches expected name: '{expectedLogicalName}'");
                 }
             }
         }
@@ -142,14 +141,12 @@ public class ConnectionReferenceProcessor
 
             var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
             var newConnRefLogicalNames = new Dictionary<string, string>();
-
             foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName) && _settings.ConnectionReferences.ProviderMappings.ContainsKey(cr.ApiName)).GroupBy(cr => cr.ApiName))
             {
-                // Check if any connection reference for this provider needs updating
                 var expectedLogicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
                 var needsUpdate = providerGroup.Any(cr =>
                     string.IsNullOrEmpty(cr.LogicalName) ||
-                    !cr.LogicalName.StartsWith($"{_settings.ConnectionReferences.Prefix}_", StringComparison.OrdinalIgnoreCase));
+                    !cr.LogicalName.Equals(expectedLogicalName, StringComparison.OrdinalIgnoreCase));
 
                 if (needsUpdate)
                 {
