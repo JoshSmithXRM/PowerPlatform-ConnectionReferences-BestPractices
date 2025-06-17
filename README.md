@@ -146,14 +146,31 @@ Configure the tool by editing `appsettings.json`:
 }
 ```
 
+**⚠️ Important**: Only add providers to ProviderMappings that you want the tool to manage. The tool will ignore any connectors not listed here, allowing you to selectively manage only specific connector types (e.g., only Dataverse connections while leaving SharePoint connections untouched).
+
 ## Provider Mappings
 
-The `ProviderMappings` section maps connector API names to their corresponding connection and connector IDs in your environment. You'll need to:
+The `ProviderMappings` section controls which connectors the tool will process and maps them to their corresponding connection and connector IDs in your environment. 
+
+**Important**: The tool will **only process providers that are explicitly listed** in the ProviderMappings section. Any flows using connectors not listed here will be skipped with a warning message.
+
+For each provider you want to manage, you'll need to specify:
 
 1. **connectionId**: The GUID of the existing connection you want to reference
 2. **connectorId**: The full connector API path (usually starts with `/providers/Microsoft.PowerApps/apis/`)
 
-To find these values, you can use the Power Platform admin center or query the Dataverse API directly.
+**Behavior**:
+- ✅ **Processes**: Flows using connectors listed in ProviderMappings that don't already follow your naming pattern
+- ⚠️ **Skips**: Flows using connectors listed in ProviderMappings that already follow your naming pattern  
+- ❌ **Ignores**: Flows using connectors NOT listed in ProviderMappings (with warning message)
+
+**Example**:
+If your ProviderMappings only contains `shared_commondataserviceforapps`, the tool will:
+- Process Dataverse flows that need standardized connection references
+- Skip Office 365, SharePoint, and other connector flows entirely
+- Show warning messages for skipped providers
+
+To find connection and connector IDs, you can use the Power Platform admin center or query the Dataverse API directly.
 
 ## Common Options
 
@@ -165,7 +182,7 @@ To find these values, you can use the Power Platform admin center or query the D
 ## Examples
 
 ```bash
-# Safe analysis of a solution
+# Safe analysis of a solution (shows all connectors, regardless of ProviderMappings)
 dotnet run -- analyze --solution "MyCloudFlows"
 
 # Analyze with vertical format for better readability
@@ -174,10 +191,10 @@ dotnet run -- analyze --solution "MyCloudFlows" --format vertical
 # Export analysis to CSV
 dotnet run -- analyze --solution "MyCloudFlows" --format csv --output "flow-analysis.csv"
 
-# Test what would be created (no changes made)
+# Test what would be created (only processes providers in ProviderMappings)
 dotnet run -- process --solution "MyCloudFlows" --dry-run
 
-# Actually create and update everything
+# Actually create and update everything (only for configured providers)
 dotnet run -- process --solution "MyCloudFlows"
 
 # Generate deployment settings for ALM
@@ -199,6 +216,37 @@ The tool automatically handles different Dataverse environment versions by tryin
 - **Service Principal 403/ConnectionAuthorizationFailed errors**: Service principals need explicit "Can use" permission on connections - see [AUTHENTICATION.md](src/PowerPlatform.Tools.ConnectionReferences/AUTHENTICATION.md#service-principal-connection-permission-error) for detailed solution
 
 ## Best Practices
+
+### Selective Provider Processing
+
+The tool uses a **selective processing model** based on your ProviderMappings configuration:
+
+#### What Gets Processed
+- **Flows using configured providers** that have connection references NOT following your naming pattern
+- Only connection references that need to be standardized are created
+- Existing connection references that already follow the pattern are left unchanged
+
+#### What Gets Skipped
+- **Flows using unconfigured providers** (not in ProviderMappings) - completely ignored with warning
+- **Flows using configured providers** that already have properly named connection references
+
+#### Example Scenario
+With this configuration:
+```json
+"ProviderMappings": {
+  "shared_commondataserviceforapps": {
+    "connectionId": "your-connection-id",
+    "connectorId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+  }
+}
+```
+
+**Tool behavior:**
+- ✅ **Processes**: Dataverse flows with connection references like `msdyn_sharedcommondataserviceforapps` → Creates `new_shared_commondataserviceforapps_[flowid]`
+- ⚠️ **Skips**: Dataverse flows already using `new_shared_commondataserviceforapps_*` naming
+- ❌ **Ignores**: Office 365, SharePoint, Teams flows (shows warning: "No mapping for provider 'shared_office365', skipping")
+
+This allows you to **incrementally standardize** your environment by focusing on specific connector types without affecting others.
 
 ### Understanding Connection References Architecture
 

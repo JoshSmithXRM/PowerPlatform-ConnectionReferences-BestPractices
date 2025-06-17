@@ -94,7 +94,6 @@ public class ConnectionReferenceProcessor
                 break;
         }
     }
-
     public async Task CreateConnectionReferencesAsync(string solutionName, bool dryRun)
     {
         var httpClient = await _dataverseService.GetAuthenticatedHttpClientAsync();
@@ -107,16 +106,29 @@ public class ConnectionReferenceProcessor
             if (flowInfo == null) continue;
 
             var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
-
-            foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)).GroupBy(cr => cr.ApiName))
+            foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)
+            && _settings.ConnectionReferences.ProviderMappings.ContainsKey(cr.ApiName))
+            .GroupBy(cr => cr.ApiName))
             {
-                await _connectionReferenceService.ProcessConnectionReferenceForProviderAsync(httpClient, flowInfo, providerGroup.Key, stats, dryRun, solutionName);
+                var expectedLogicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
+                var needsNewConnectionRef = providerGroup.Any(cr =>
+                    string.IsNullOrEmpty(cr.LogicalName) ||
+                    !cr.LogicalName.StartsWith($"{_settings.ConnectionReferences.Prefix}_", StringComparison.OrdinalIgnoreCase));
+
+                if (needsNewConnectionRef)
+                {
+                    Console.WriteLine($"[INFO] {flowInfo.Name}: Processing provider '{providerGroup.Key}'");
+                    await _connectionReferenceService.ProcessConnectionReferenceForProviderAsync(httpClient, flowInfo, providerGroup.Key, stats, dryRun, solutionName);
+                }
+                else
+                {
+                    Console.WriteLine($"[INFO] {flowInfo.Name}: Skipping provider '{providerGroup.Key}' - already follows naming pattern");
+                }
             }
         }
 
         PrintSummary(stats);
     }
-
     public async Task UpdateFlowsAsync(string solutionName, bool dryRun)
     {
         var httpClient = await _dataverseService.GetAuthenticatedHttpClientAsync();
@@ -131,10 +143,18 @@ public class ConnectionReferenceProcessor
             var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
             var newConnRefLogicalNames = new Dictionary<string, string>();
 
-            foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName)).GroupBy(cr => cr.ApiName))
+            foreach (var providerGroup in connectionRefs.Where(cr => !string.IsNullOrEmpty(cr.ApiName) && _settings.ConnectionReferences.ProviderMappings.ContainsKey(cr.ApiName)).GroupBy(cr => cr.ApiName))
             {
-                var logicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
-                newConnRefLogicalNames[providerGroup.Key] = logicalName;
+                // Check if any connection reference for this provider needs updating
+                var expectedLogicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
+                var needsUpdate = providerGroup.Any(cr =>
+                    string.IsNullOrEmpty(cr.LogicalName) ||
+                    !cr.LogicalName.StartsWith($"{_settings.ConnectionReferences.Prefix}_", StringComparison.OrdinalIgnoreCase));
+
+                if (needsUpdate)
+                {
+                    newConnRefLogicalNames[providerGroup.Key] = expectedLogicalName;
+                }
             }
 
             if (newConnRefLogicalNames.Any())

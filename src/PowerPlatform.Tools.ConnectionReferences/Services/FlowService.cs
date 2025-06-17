@@ -96,12 +96,6 @@ public class FlowService : IFlowService
             if (apiName != null && newConnRefLogicalNames.ContainsKey(apiName))
             {
                 var oldLogicalName = prop.Value["connection"]?["connectionReferenceLogicalName"]?.ToString();
-                if (!string.IsNullOrEmpty(oldLogicalName))
-                {
-                    oldConnectionRefs.Add(oldLogicalName);
-                    Console.WriteLine($"[INFO] {flow.Name}: Marking old connection reference '{oldLogicalName}' for deletion");
-                }
-
                 prop.Value["connection"]!["connectionReferenceLogicalName"] = newConnRefLogicalNames[apiName];
                 Console.WriteLine($"[INFO] {flow.Name}: Updated connection reference from '{oldLogicalName}' to '{newConnRefLogicalNames[apiName]}'");
             }
