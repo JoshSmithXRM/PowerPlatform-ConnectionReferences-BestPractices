@@ -232,6 +232,83 @@ public class ConnectionReferenceProcessor
         Console.WriteLine($"Total Errors: {stats.DeletedConnRefErrorCount}");
     }
 
+    public async Task AddExistingConnectionReferencesAsync(string solutionName, bool dryRun)
+    {
+        var httpClient = await _dataverseService.GetAuthenticatedHttpClientAsync();
+        var flows = await _flowService.GetCloudFlowsInSolutionAsync(httpClient, solutionName);
+        var stats = new ProcessingStats();
+
+        Console.WriteLine($"[INFO] Found {flows.Count} flows in solution '{solutionName}'");
+
+        var connectionReferencesToAdd = new HashSet<string>();
+
+        foreach (var flow in flows)
+        {
+            var flowInfo = _flowService.ExtractFlowInfo(flow);
+            if (flowInfo == null) continue;
+
+            var connectionRefs = _flowService.GetConnectionReferences(flowInfo.ClientData);
+            foreach (var connRef in connectionRefs)
+            {
+                if (!string.IsNullOrEmpty(connRef.LogicalName))
+                {
+                    connectionReferencesToAdd.Add(connRef.LogicalName);
+                    Console.WriteLine($"[INFO] Flow '{flowInfo.Name}' uses connection reference '{connRef.LogicalName}'");
+                }
+            }
+        }
+
+        Console.WriteLine($"[INFO] Found {connectionReferencesToAdd.Count} unique connection references used by flows");
+
+        var existingConnRefs = await _connectionReferenceService.GetConnectionReferencesInSolutionAsync(httpClient, solutionName);
+        var existingLogicalNames = existingConnRefs.Select(cr => cr.LogicalName).ToHashSet();
+
+        Console.WriteLine($"[INFO] Solution already contains {existingConnRefs.Count} connection references");
+
+        foreach (var logicalName in connectionReferencesToAdd)
+        {
+            if (existingLogicalNames.Contains(logicalName))
+            {
+                Console.WriteLine($"[SKIP] Connection reference '{logicalName}' already exists in solution '{solutionName}'");
+                continue;
+            }
+
+            var connRefId = await _connectionReferenceService.QueryConnectionReferenceIdAsync(httpClient, logicalName);
+
+            if (string.IsNullOrEmpty(connRefId))
+            {
+                Console.WriteLine($"[WARN] Connection reference '{logicalName}' does not exist in the environment, skipping");
+                continue;
+            }
+
+            if (dryRun)
+            {
+                Console.WriteLine($"[DRY RUN] Would add existing connection reference '{logicalName}' (ID: {connRefId}) to solution '{solutionName}'");
+                stats.AddedToSolutionCount++;
+            }
+            else
+            {
+                Console.WriteLine($"[INFO] Adding existing connection reference '{logicalName}' (ID: {connRefId}) to solution '{solutionName}'");
+                var success = await _connectionReferenceService.AddConnectionReferenceToSolutionAsync(httpClient, connRefId, logicalName, solutionName);
+
+                if (success)
+                {
+                    stats.AddedToSolutionCount++;
+                    Console.WriteLine($"[SUCCESS] Added connection reference '{logicalName}' to solution '{solutionName}'");
+                }
+                else
+                {
+                    stats.AddedToSolutionErrorCount++;
+                    Console.WriteLine($"[ERROR] Failed to add connection reference '{logicalName}' to solution '{solutionName}'");
+                }
+            }
+        }
+
+        Console.WriteLine($"\n--- ADD EXISTING REFERENCES SUMMARY ---");
+        Console.WriteLine($"Connection References Added to Solution: {stats.AddedToSolutionCount} (Errors: {stats.AddedToSolutionErrorCount})");
+        Console.WriteLine($"Total Errors: {stats.AddedToSolutionErrorCount}");
+    }
+
     private async Task<ConnectionReferenceDetails?> GetConnectionReferenceDetailsAsync(HttpClient httpClient, string logicalName)
     {
         try

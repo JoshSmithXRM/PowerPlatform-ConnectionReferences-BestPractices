@@ -106,6 +106,28 @@ The generated deployment settings file includes descriptive placeholders for eas
 
 These placeholders make automated deployment processes much easier by providing clear, searchable tokens for connection ID replacement.
 
+### Add Existing Connection References
+Add existing connection references that are used by flows in the solution to the solution itself:
+```bash
+dotnet run -- add-existing-refs --solution "YourSolutionName" [--dry-run]
+```
+
+**Purpose**: This command ensures that connection references used by flows in a solution are actually included in that solution. This is important for proper solution deployment and dependency management.
+
+**How it works**:
+- Analyzes all flows in the solution to identify which connection references they use
+- Checks if those connection references already exist in the environment
+- Adds existing connection references to the solution (does NOT create new ones)
+- Skips connection references that are already part of the solution
+- Provides detailed logging of what was added vs. skipped
+
+**Key differences from other commands**:
+- **`analyze`**: Only shows connection reference usage (read-only)
+- **`create-refs`**: Creates new connection references and adds them to solution
+- **`add-existing-refs`**: Only adds existing connection references to solution (no creation)
+
+**Example scenario**: You have flows in a solution that reference connection references created outside of the solution. This command will add those existing connection references to the solution so they're included when you export/import the solution.
+
 ### Clean Up
 Remove old unused connection references (dependency-aware - only deletes connection references not used by any flows):
 ```bash
@@ -199,6 +221,9 @@ dotnet run -- process --solution "MyCloudFlows"
 
 # Generate deployment settings for ALM
 dotnet run -- generate-deployment-settings --solution "MyCloudFlows" --output "release/deploymentsettings.json"
+
+# Add existing connection references to solution
+dotnet run -- add-existing-refs --solution "MyCloudFlows" --dry-run
 ```
 
 ## Troubleshooting

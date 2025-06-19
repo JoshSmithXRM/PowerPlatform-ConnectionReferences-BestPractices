@@ -64,12 +64,17 @@ class Program
         generateCommand.AddOption(outputOption);
         rootCommand.AddCommand(generateCommand);
         generateCommand.SetHandler(async (solution, output) => await ExecuteCommand("generate-deployment-settings", solution, false, output), solutionOption, outputOption);
-
         var cleanupCommand = new Command("cleanup", "Remove old unused connection references");
         cleanupCommand.AddOption(solutionOption);
         cleanupCommand.AddOption(dryRunOption);
         rootCommand.AddCommand(cleanupCommand);
         cleanupCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("cleanup", solution, dryRun, null), solutionOption, dryRunOption);
+
+        var addExistingRefsCommand = new Command("add-existing-refs", "Add existing connection references used by flows to the solution");
+        addExistingRefsCommand.AddOption(solutionOption);
+        addExistingRefsCommand.AddOption(dryRunOption);
+        rootCommand.AddCommand(addExistingRefsCommand);
+        addExistingRefsCommand.SetHandler(async (solution, dryRun) => await ExecuteCommand("add-existing-refs", solution, dryRun, null), solutionOption, dryRunOption);
 
         return await rootCommand.InvokeAsync(args);
     }
@@ -124,6 +129,9 @@ class Program
                     break;
                 case "cleanup":
                     await processor.CleanupAsync(solution, dryRun);
+                    break;
+                case "add-existing-refs":
+                    await processor.AddExistingConnectionReferencesAsync(solution, dryRun);
                     break;
             }
         }
