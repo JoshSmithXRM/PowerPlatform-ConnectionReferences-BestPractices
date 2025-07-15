@@ -10,4 +10,7 @@ public interface IConnectionReferenceService
     Task<bool> DeleteConnectionReferenceAsync(HttpClient httpClient, ConnectionReferenceInfo connectionRef);
     Task<bool> AddConnectionReferenceToSolutionAsync(HttpClient httpClient, string connRefId, string logicalName, string solutionName);
     Task<ConnectionReferenceResult?> ProcessConnectionReferenceForProviderAsync(HttpClient httpClient, FlowInfo flow, string provider, ProcessingStats stats, bool dryRun, string solutionName);
+    Task<bool> DoesConnectionReferenceMatchConfigurationAsync(HttpClient httpClient, string logicalName, string expectedConnectionId);
+    Task<ConnectionReferenceInfo?> GetConnectionReferenceByLogicalNameAsync(HttpClient httpClient, string logicalName);
+    Task<bool> UpdateConnectionReferenceAsync(HttpClient httpClient, string connectionReferenceId, string newConnectionId);
 }

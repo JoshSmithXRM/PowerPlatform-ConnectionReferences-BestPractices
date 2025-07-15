@@ -110,18 +110,61 @@ public class ConnectionReferenceProcessor
             .GroupBy(cr => cr.ApiName))
             {
                 var expectedLogicalName = _dataverseService.GenerateLogicalName(providerGroup.Key, flowInfo.Id);
+                var expectedConnectionId = _settings.ConnectionReferences.ProviderMappings[providerGroup.Key].ConnectionId;
+
                 var needsNewConnectionRef = providerGroup.Any(cr =>
                     string.IsNullOrEmpty(cr.LogicalName) ||
                     !cr.LogicalName.Equals(expectedLogicalName, StringComparison.OrdinalIgnoreCase));
+
+                if (!needsNewConnectionRef)
+                {
+                    var connectionRefMatches = await _connectionReferenceService.DoesConnectionReferenceMatchConfigurationAsync(
+                        httpClient, expectedLogicalName, expectedConnectionId);
+
+                    if (!connectionRefMatches)
+                    {
+                        Console.WriteLine($"[INFO] {flowInfo.Name}: Connection reference '{expectedLogicalName}' exists but connection ID doesn't match configuration");
+
+                        if (!dryRun)
+                        {
+                            var connectionRef = await _connectionReferenceService.GetConnectionReferenceByLogicalNameAsync(httpClient, expectedLogicalName);
+                            if (connectionRef != null)
+                            {
+                                var updateSuccess = await _connectionReferenceService.UpdateConnectionReferenceAsync(
+                                    httpClient, connectionRef.Id, expectedConnectionId);
+
+                                if (updateSuccess)
+                                {
+                                    stats.UpdatedConnRefCount++;
+                                    Console.WriteLine($"[UPDATE] Successfully updated connection reference '{expectedLogicalName}' with correct connection ID");
+                                }
+                                else
+                                {
+                                    stats.UpdatedConnRefErrorCount++;
+                                    Console.WriteLine($"[ERROR] Failed to update connection reference '{expectedLogicalName}' with connection ID");
+                                }
+                            }
+                            else
+                            {
+                                stats.UpdatedConnRefErrorCount++;
+                                Console.WriteLine($"[ERROR] Could not find connection reference '{expectedLogicalName}' to update");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[DRY-RUN] Would update connection reference '{expectedLogicalName}' with connection ID: {expectedConnectionId}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[INFO] {flowInfo.Name}: Skipping provider '{providerGroup.Key}' - connection reference '{expectedLogicalName}' matches configuration");
+                    }
+                }
 
                 if (needsNewConnectionRef)
                 {
                     Console.WriteLine($"[INFO] {flowInfo.Name}: Processing provider '{providerGroup.Key}' - expected: '{expectedLogicalName}'");
                     await _connectionReferenceService.ProcessConnectionReferenceForProviderAsync(httpClient, flowInfo, providerGroup.Key, stats, dryRun, solutionName);
-                }
-                else
-                {
-                    Console.WriteLine($"[INFO] {flowInfo.Name}: Skipping provider '{providerGroup.Key}' - already matches expected name: '{expectedLogicalName}'");
                 }
             }
         }
@@ -347,6 +390,7 @@ public class ConnectionReferenceProcessor
     {
         Console.WriteLine($"\n--- SUMMARY ---");
         Console.WriteLine($"Connection References Created: {stats.CreatedConnRefCount} (Errors: {stats.CreatedConnRefErrorCount})");
+        Console.WriteLine($"Connection References Updated: {stats.UpdatedConnRefCount} (Errors: {stats.UpdatedConnRefErrorCount})");
         Console.WriteLine($"Connection References Added to Solution: {stats.AddedToSolutionCount} (Errors: {stats.AddedToSolutionErrorCount})");
         Console.WriteLine($"Flows Updated: {stats.UpdatedFlowCount} (Errors: {stats.UpdatedFlowErrorCount})");
         Console.WriteLine($"Connection References Deleted: {stats.DeletedConnRefCount} (Errors: {stats.DeletedConnRefErrorCount})");

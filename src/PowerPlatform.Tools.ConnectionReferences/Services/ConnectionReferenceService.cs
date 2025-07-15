@@ -9,7 +9,7 @@ public class ConnectionReferenceService : IConnectionReferenceService
 {
     private readonly AppSettings _settings;
     private readonly IDataverseService _dataverseService;
-    private static readonly int[] SolutionComponentTypes = { 10132, 10469 };
+    private int? _cachedConnectionReferenceObjectTypeCode;
 
     public ConnectionReferenceService(AppSettings settings, IDataverseService dataverseService)
     {
@@ -21,6 +21,54 @@ public class ConnectionReferenceService : IConnectionReferenceService
     {
         var baseUrl = _settings.PowerPlatform.DataverseUrl.TrimEnd('/');
         return $"{baseUrl}/api/data/v9.2/{endpoint.TrimStart('/')}";
+    }
+
+    private async Task<int?> GetConnectionReferenceObjectTypeCodeAsync(HttpClient httpClient)
+    {
+        if (_cachedConnectionReferenceObjectTypeCode.HasValue)
+        {
+            return _cachedConnectionReferenceObjectTypeCode;
+        }
+
+        try
+        {
+            Console.WriteLine("[DEBUG] Discovering connection reference object type code...");
+
+            var metadataUrl = BuildApiUrl("EntityDefinitions?$filter=LogicalName eq 'connectionreference'&$select=ObjectTypeCode,LogicalName");
+            var resp = await httpClient.GetAsync(metadataUrl);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var content = await resp.Content.ReadAsStringAsync();
+                var data = JsonConvert.DeserializeObject<JObject>(content);
+                var entities = data?["value"] as JArray;
+
+                if (entities?.Any() == true)
+                {
+                    var entity = entities[0] as JObject;
+                    var objectTypeCode = entity?["ObjectTypeCode"]?.Value<int>();
+
+                    if (objectTypeCode.HasValue)
+                    {
+                        _cachedConnectionReferenceObjectTypeCode = objectTypeCode.Value;
+                        Console.WriteLine($"[INFO] Discovered connection reference object type code: {objectTypeCode.Value}");
+                        return objectTypeCode.Value;
+                    }
+                }
+            }
+            else
+            {
+                var errorContent = await resp.Content.ReadAsStringAsync();
+                Console.WriteLine($"[WARN] Failed to query entity metadata: {resp.StatusCode} - {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Exception while discovering connection reference object type code: {ex.Message}");
+        }
+
+        Console.WriteLine("[WARN] Failed to discover connection reference object type code dynamically");
+        return null;
     }
 
     public async Task<string?> CreateConnectionReferenceAsync(HttpClient httpClient, string logicalName, string displayName, string connectionId, string connectorId)
@@ -165,17 +213,26 @@ public class ConnectionReferenceService : IConnectionReferenceService
     {
         Console.WriteLine($"[DEBUG] Adding connection reference to solution - ID: {connRefId}, LogicalName: {logicalName}");
 
-        foreach (var componentType in SolutionComponentTypes)
+        var objectTypeCode = await GetConnectionReferenceObjectTypeCodeAsync(httpClient);
+        if (!objectTypeCode.HasValue)
         {
-            Console.WriteLine($"[DEBUG] Trying component type {componentType} for '{logicalName}'");
-            if (await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, componentType))
-                return true;
-
-            Console.WriteLine($"[INFO] Component type {componentType} failed, trying next type for '{logicalName}'");
+            Console.WriteLine($"[ERROR] Could not discover connection reference object type code for '{logicalName}'");
+            return false;
         }
 
-        Console.WriteLine($"[ERROR] All component types failed for '{logicalName}'");
-        return false;
+        Console.WriteLine($"[DEBUG] Using component type {objectTypeCode.Value} for '{logicalName}'");
+        var success = await TryAddWithComponentType(httpClient, connRefId, logicalName, solutionName, objectTypeCode.Value);
+
+        if (success)
+        {
+            Console.WriteLine($"[SUCCESS] Added '{logicalName}' to solution with component type {objectTypeCode.Value}");
+        }
+        else
+        {
+            Console.WriteLine($"[ERROR] Failed to add '{logicalName}' to solution with component type {objectTypeCode.Value}");
+        }
+
+        return success;
     }
 
     public async Task<ConnectionReferenceResult?> ProcessConnectionReferenceForProviderAsync(HttpClient httpClient, FlowInfo flow, string provider, ProcessingStats stats, bool dryRun, string solutionName)
@@ -258,5 +315,103 @@ public class ConnectionReferenceService : IConnectionReferenceService
         var errorBody = await resp.Content.ReadAsStringAsync();
         Console.WriteLine($"[DEBUG] Component type {componentType} failed for '{logicalName}': {resp.StatusCode} - {errorBody}");
         return false;
+    }
+
+    public async Task<bool> DoesConnectionReferenceMatchConfigurationAsync(HttpClient httpClient, string logicalName, string expectedConnectionId)
+    {
+        try
+        {
+            var connectionRef = await GetConnectionReferenceByLogicalNameAsync(httpClient, logicalName);
+            if (connectionRef == null)
+            {
+                return false;
+            }
+
+            return string.Equals(connectionRef.ConnectionId, expectedConnectionId, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to check connection reference '{logicalName}': {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<ConnectionReferenceInfo?> GetConnectionReferenceByLogicalNameAsync(HttpClient httpClient, string logicalName)
+    {
+        try
+        {
+            var filter = $"$filter=connectionreferencelogicalname eq '{logicalName}'";
+            var select = "$select=connectionreferenceid,connectionreferencelogicalname,connectionreferencedisplayname,connectionid,connectorid";
+            var url = BuildApiUrl($"connectionreferences?{filter}&{select}");
+
+            var resp = await httpClient.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[ERROR] Failed to query connection reference '{logicalName}': {resp.StatusCode}");
+                return null;
+            }
+
+            var content = await resp.Content.ReadAsStringAsync();
+            var data = JsonConvert.DeserializeObject<JObject>(content);
+            var values = data?["value"] as JArray;
+
+            if (values?.Any() == true)
+            {
+                var item = values[0] as JObject;
+                return new ConnectionReferenceInfo
+                {
+                    Id = item?["connectionreferenceid"]?.ToString() ?? "",
+                    LogicalName = item?["connectionreferencelogicalname"]?.ToString() ?? "",
+                    DisplayName = item?["connectionreferencedisplayname"]?.ToString() ?? "",
+                    ConnectionId = item?["connectionid"]?.ToString() ?? "",
+                    ConnectorId = item?["connectorid"]?.ToString() ?? ""
+                };
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to get connection reference '{logicalName}': {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> UpdateConnectionReferenceAsync(HttpClient httpClient, string connectionReferenceId, string newConnectionId)
+    {
+        try
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["connectionid"] = newConnectionId
+            };
+
+            var patchContent = new StringContent(
+                JsonConvert.SerializeObject(payload),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            var request = new HttpRequestMessage(HttpMethod.Patch, BuildApiUrl($"connectionreferences({connectionReferenceId})"))
+            {
+                Content = patchContent
+            };
+
+            var resp = await httpClient.SendAsync(request);
+            if (resp.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[UPDATE] Successfully updated connection reference ID: {connectionReferenceId} with new connection ID: {newConnectionId}");
+                return true;
+            }
+
+            var errorBody = await resp.Content.ReadAsStringAsync();
+            Console.WriteLine($"[ERROR] Failed to update connection reference {connectionReferenceId}: {resp.StatusCode} - {errorBody}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to update connection reference {connectionReferenceId}: {ex.Message}");
+            return false;
+        }
     }
 }
